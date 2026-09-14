@@ -1,0 +1,68 @@
+# Local stack: MySQL + Spring Boot backend + React frontend.
+#
+# Run from the repository root:
+#   cp templates/.env.example templates/.env
+#   docker compose -f templates/docker-compose.yml up
+#
+# Default startup launches only the database, because application
+# code is owned by other members and not present yet. Once backend/app and
+# frontend/app contain a Dockerfile, start everything with:
+#   docker compose -f templates/docker-compose.yml --profile app up --build
+
+name: lunara-spa
+
+services:
+  db:
+    image: mysql:8.4
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-lunara_spa}
+      MYSQL_USER: ${MYSQL_USER:-lunara}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ../database/Web_DataBase_USTH.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    profiles: ["app"]
+    build:
+      context: ../backend/app
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://db:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-lunara}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?set in .env}
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ../frontend/app
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
