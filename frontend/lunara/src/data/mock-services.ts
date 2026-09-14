@@ -1,0 +1,95 @@
+import { Service } from '@/types';
+import { IMAGES } from '@/lib/assets';
+
+export const MOCK_SERVICES: Service[] = [
+  {
+    id: 'srv-1',
+    name: 'Massage Thư Giãn',
+    category: 'Massage',
+    description: 'Liệu pháp xoa bóp tinh dầu thảo mộc hữu cơ, giải tỏa căng cơ, lưu thông khí huyết và mang lại cảm giác an yên tuyệt đối.',
+    imageUrl: IMAGES.services.relaxMassage,
+    basePrice: 450000,
+    minimumDurationMinutes: 60,
+    isDurationAdjustable: true,
+    durationStepMinutes: 30,
+    pricePerDurationStep: 200000,
+    preparationBufferMinutes: 10,
+    cleanupBufferMinutes: 10,
+    displayOrder: 1,
+    isActive: true
+  },
+  {
+    id: 'srv-2',
+    name: 'Chăm Sóc Da Mặt Chuyên Sâu',
+    category: 'Facial',
+    description: 'Quy trình thanh lọc tầng sâu, bổ sung dưỡng chất tự nhiên và cấp ẩm tức thì, giúp tái tạo làn da sáng hồng căng mịn.',
+    imageUrl: IMAGES.services.facialCare,
+    basePrice: 350000,
+    minimumDurationMinutes: 45,
+    isDurationAdjustable: false,
+    preparationBufferMinutes: 10,
+    cleanupBufferMinutes: 10,
+    displayOrder: 2,
+    isActive: true
+  },
+  {
+    id: 'srv-3',
+    name: 'Trị Liệu Thảo Dược Toàn Thân',
+    category: 'Body Care',
+    description: 'Kết hợp túi chườm thảo dược cổ truyền và kỹ thuật ấn huyệt chuẩn xác, đánh tan mệt mỏi tích tụ và phục hồi thể trạng.',
+    imageUrl: IMAGES.services.bodyTherapy,
+    basePrice: 650000,
+    minimumDurationMinutes: 90,
+    isDurationAdjustable: false,
+    preparationBufferMinutes: 15,
+    cleanupBufferMinutes: 15,
+    displayOrder: 3,
+    isActive: true
+  },
+  {
+    id: 'srv-4',
+    name: 'Đá Nóng Himalaya',
+    category: 'Massage',
+    description: 'Sử dụng đá muối khoáng nóng Himalaya truyền nhiệt sâu vào các huyệt đạo, đào thải độc tố và cân bằng dòng năng lượng cơ thể.',
+    imageUrl: IMAGES.services.hotStone,
+    basePrice: 500000,
+    minimumDurationMinutes: 60,
+    isDurationAdjustable: true,
+    durationStepMinutes: 30,
+    pricePerDurationStep: 220000,
+    preparationBufferMinutes: 15,
+    cleanupBufferMinutes: 10,
+    displayOrder: 4,
+    isActive: true
+  },
+  {
+    id: 'srv-5',
+    name: 'Tẩy Tế Bào Chết Cà Phê Cốt Dừa',
+    category: 'Body Care',
+    description: 'Thành phần hữu cơ từ hạt cà phê Đắk Lắk và tinh dầu dừa nguyên chất giúp lấy đi lớp sừng thô ráp, cho da mướt mịn tự nhiên.',
+    imageUrl: IMAGES.services.bodyScrub,
+    basePrice: 300000,
+    minimumDurationMinutes: 45,
+    isDurationAdjustable: false,
+    preparationBufferMinutes: 10,
+    cleanupBufferMinutes: 10,
+    displayOrder: 5,
+    isActive: true
+  },
+  {
+    id: 'srv-6',
+    name: 'Gói VIP Thư Thái Toàn Thân',
+    category: 'VIP Package',
+    description: 'Trải nghiệm suite riêng đẳng cấp: ngâm bồn thảo dược cánh hoa, massage body tinh dầu quý và chăm sóc da mặt phục hồi.',
+    imageUrl: IMAGES.services.vipPackage,
+    basePrice: 1200000,
+    minimumDurationMinutes: 120,
+    isDurationAdjustable: true,
+    durationStepMinutes: 30,
+    pricePerDurationStep: 300000,
+    preparationBufferMinutes: 20,
+    cleanupBufferMinutes: 20,
+    displayOrder: 6,
+    isActive: true
+  }
+];
