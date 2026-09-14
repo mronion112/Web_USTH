@@ -1,5 +1,20 @@
 # Feedback
 
+## Tables liên quan
+
+```text
+feedback
+bookings
+```
+
+## Foreign Key
+
+```text
+feedback.booking_id -> bookings.id
+```
+
+---
+
 ## 1. Tạo Feedback
 
 **Endpoint**
@@ -14,23 +29,13 @@
 POST
 ```
 
-**Tables liên quan**
-
-```text
-feedback, feedback_ratings, bookings
-```
-
-**Mục đích**
-
-User đánh giá dịch vụ sau khi Booking hoàn thành.
-
 **Request JSON**
 
 ```json
 {
   "bookingId": 100,
-  "ratingId": 5,
-  "comment": "Nhân viên nhiệt tình."
+  "rating": 5,
+  "comment": "Dịch vụ rất tốt"
 }
 ```
 
@@ -39,23 +44,21 @@ User đánh giá dịch vụ sau khi Booking hoàn thành.
 ```json
 {
   "success": true,
-  "message": "Feedback submitted successfully",
+  "message": "Create feedback successfully",
   "data": {
-    "id": 15,
+    "id": 25,
     "bookingId": 100,
-    "rating": {
-      "id": 5,
-      "name": "XUẤT SẮC"
-    },
-    "comment": "Nhân viên nhiệt tình."
+    "rating": 5,
+    "comment": "Dịch vụ rất tốt"
   },
-  "timestamp": "2026-09-20T11:00:00"
+  "timestamp": "2026-09-20T12:00:00"
 }
 ```
 
 **Quy tắc chính:**
-- Chỉ Booking `COMPLETED` mới được Feedback.
-- Một Booking chỉ Feedback một lần.
+- Rating từ `1` đến `5`.
+- Một Booking có tối đa một Feedback.
+- Chỉ nên Feedback sau khi Booking `COMPLETED`.
 
 ---
 
@@ -73,12 +76,6 @@ User đánh giá dịch vụ sau khi Booking hoàn thành.
 GET
 ```
 
-**Tables liên quan**
-
-```text
-feedback, feedback_ratings
-```
-
 **Response JSON**
 
 ```json
@@ -86,12 +83,11 @@ feedback, feedback_ratings
   "success": true,
   "message": "Get feedback successfully",
   "data": {
-    "id": 15,
+    "id": 25,
     "bookingId": 100,
     "rating": 5,
-    "ratingName": "XUẤT SẮC",
-    "comment": "Nhân viên nhiệt tình."
+    "comment": "Dịch vụ rất tốt"
   },
-  "timestamp": "2026-09-20T11:00:00"
+  "timestamp": "2026-09-20T12:00:00"
 }
 ```

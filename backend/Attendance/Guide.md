@@ -1,124 +1,55 @@
 # Attendance
 
-## 1. Check-in
+## Trạng thái với schema hiện tại
 
-**Endpoint**
+Feature Attendance được giữ lại trong cấu trúc Backend theo yêu cầu project cũ.
 
-```text
-/api/attendance/check-in
-```
-
-**Method**
+Tuy nhiên schema `lunara_spa` hiện tại **không có bảng `attendance`** và cũng không có field tương đương để lưu:
 
 ```text
-POST
+work_date
+check_in
+check_out
 ```
 
-**Tables liên quan**
+Vì vậy không thể triển khai đúng các API:
 
 ```text
-attendance, staff_profiles
+POST /api/attendance/check-in
+POST /api/attendance/check-out
+GET  /api/attendance/my
 ```
 
-**Mục đích**
+mà vẫn bám 100% database hiện tại.
 
-Staff chấm công bắt đầu ngày làm việc.
+## Tables liên quan hiện tại
 
-**Request JSON**
+```text
+Không có
+```
 
-Không cần Body. Staff lấy từ JWT.
+## Foreign Key
 
-**Response JSON**
+```text
+Không có
+```
+
+## Response nếu Endpoint chưa được hỗ trợ
 
 ```json
 {
-  "success": true,
-  "message": "Check-in successfully",
-  "data": {
-    "id": 20,
-    "staffId": 5,
-    "workDate": "2026-09-20",
-    "checkIn": "2026-09-20T08:02:13",
-    "checkOut": null
-  },
-  "timestamp": "2026-09-20T08:02:13"
+  "success": false,
+  "message": "Attendance is not supported by current lunara_spa schema",
+  "data": null,
+  "timestamp": "2026-09-20T08:00:00"
 }
 ```
 
----
+## Ghi chú
 
-## 2. Check-out
+Không dùng `staff_working_hours` thay cho Attendance:
 
-**Endpoint**
+- `staff_working_hours` = lịch làm việc dự kiến.
+- Attendance = thời gian Staff thực tế check-in/check-out.
 
-```text
-/api/attendance/check-out
-```
-
-**Method**
-
-```text
-POST
-```
-
-**Tables liên quan**
-
-```text
-attendance
-```
-
-**Response JSON**
-
-```json
-{
-  "success": true,
-  "message": "Check-out successfully",
-  "data": {
-    "id": 20,
-    "staffId": 5,
-    "workDate": "2026-09-20",
-    "checkIn": "2026-09-20T08:02:13",
-    "checkOut": "2026-09-20T17:05:20"
-  },
-  "timestamp": "2026-09-20T17:05:20"
-}
-```
-
----
-
-## 3. Lấy lịch sử chấm công của Staff
-
-**Endpoint**
-
-```text
-/api/attendance/my
-```
-
-**Method**
-
-```text
-GET
-```
-
-**Tables liên quan**
-
-```text
-attendance
-```
-
-**Response JSON**
-
-```json
-{
-  "success": true,
-  "message": "Get attendance successfully",
-  "data": [
-    {
-      "workDate": "2026-09-20",
-      "checkIn": "2026-09-20T08:02:13",
-      "checkOut": "2026-09-20T17:05:20"
-    }
-  ],
-  "timestamp": "2026-09-20T18:00:00"
-}
-```
+Muốn triển khai Attendance đúng nghĩa cần thay đổi database, vì vậy Guide này không tự thêm table mới.

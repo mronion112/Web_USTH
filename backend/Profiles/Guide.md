@@ -1,6 +1,23 @@
 # Profiles
 
-## 1. Lấy profile của User hiện tại
+## Tables liên quan
+
+```text
+accounts
+customer_profiles
+staff_profiles
+```
+
+## Foreign Key
+
+```text
+customer_profiles.account_id -> accounts.id
+staff_profiles.account_id -> accounts.id
+```
+
+---
+
+## 1. Lấy Profile hiện tại
 
 **Endpoint**
 
@@ -14,15 +31,13 @@
 GET
 ```
 
-**Tables liên quan**
-
-```text
-users, customer_profiles
-```
-
 **Mục đích**
 
-Lấy thông tin profile của USER đang đăng nhập.
+Lấy profile của Account hiện tại.
+
+**Request JSON**
+
+Không cần Body.
 
 **Response JSON**
 
@@ -31,13 +46,13 @@ Lấy thông tin profile của USER đang đăng nhập.
   "success": true,
   "message": "Get profile successfully",
   "data": {
-    "id": 10,
-    "fullName": "Nguyen Van A",
+    "accountId": 10,
     "email": "user@gmail.com",
+    "displayName": "Nguyen Van A",
+    "role": "CUSTOMER",
     "phone": "0912345678",
-    "gender": "MALE",
-    "dateOfBirth": "2004-05-20",
-    "address": "Ha Noi"
+    "preferences": "Massage nhẹ",
+    "internalNotes": null
   },
   "timestamp": "2026-09-20T10:00:00"
 }
@@ -45,7 +60,7 @@ Lấy thông tin profile của USER đang đăng nhập.
 
 ---
 
-## 2. Cập nhật profile
+## 2. Cập nhật Customer Profile
 
 **Endpoint**
 
@@ -59,21 +74,16 @@ Lấy thông tin profile của USER đang đăng nhập.
 PUT
 ```
 
-**Tables liên quan**
+**Mục đích**
 
-```text
-users, customer_profiles
-```
+Customer cập nhật thông tin Profile.
 
 **Request JSON**
 
 ```json
 {
-  "fullName": "Nguyen Van A",
   "phone": "0912345678",
-  "gender": "MALE",
-  "dateOfBirth": "2004-05-20",
-  "address": "Ha Noi"
+  "preferences": "Massage nhẹ"
 }
 ```
 
@@ -82,15 +92,14 @@ users, customer_profiles
 ```json
 {
   "success": true,
-  "message": "Profile updated successfully",
+  "message": "Update profile successfully",
   "data": {
-    "id": 10,
-    "fullName": "Nguyen Van A",
+    "accountId": 10,
     "phone": "0912345678",
-    "address": "Ha Noi"
+    "preferences": "Massage nhẹ"
   },
   "timestamp": "2026-09-20T10:00:00"
 }
 ```
 
-**Quy tắc chính:** Không cho User tự đổi `role`.
+**Quy tắc chính:** Không cho phép Customer tự thay đổi `role`, `employee_code` hoặc `job_title`.

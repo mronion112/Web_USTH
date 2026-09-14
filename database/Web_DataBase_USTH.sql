@@ -1,239 +1,285 @@
-DROP DATABASE IF EXISTS rosa_spa;
+-- LUNARA SPA DATABASE
 
-CREATE DATABASE rosa_spa;
+DROP DATABASE IF EXISTS lunara_spa;
 
-USE rosa_spa;
+CREATE DATABASE lunara_spa
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+USE lunara_spa;
 
 
 -- ============================================================
 -- 1. ROLES
--- USER | STAFF | MANAGER
+-- OWNER / MANAGER / RECEPTIONIST / THERAPIST /
+-- ACCOUNTANT / CUSTOMER
 -- ============================================================
 
 CREATE TABLE roles (
     id TINYINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(30) NOT NULL UNIQUE,
+
+    code VARCHAR(30) NOT NULL UNIQUE,
+
+    name VARCHAR(100) NOT NULL,
+
     description VARCHAR(255)
 );
 
-INSERT INTO roles (name, description)
-VALUES
-    ('USER', 'Khách hàng của Rosa Spa'),
-    ('STAFF', 'Nhân viên Rosa Spa'),
-    ('MANAGER', 'Quản lý Rosa Spa');
+
+-- ============================================================
+-- 2. PERMISSIONS
+-- ============================================================
+
+CREATE TABLE permissions (
+    id SMALLINT AUTO_INCREMENT PRIMARY KEY,
+
+    code VARCHAR(100) NOT NULL UNIQUE,
+
+    module VARCHAR(50) NOT NULL,
+
+    description VARCHAR(255)
+);
+
+CREATE INDEX idx_permissions_module
+    ON permissions(module);
 
 
 -- ============================================================
--- 2. USERS
--- Account chung cho USER / STAFF / MANAGER
+-- 3. ROLE PERMISSIONS
+-- Many-to-Many: roles <-> permissions
 -- ============================================================
 
-CREATE TABLE users (
+CREATE TABLE role_permissions (
+    role_id TINYINT NOT NULL,
+
+    permission_id SMALLINT NOT NULL,
+
+    PRIMARY KEY (role_id, permission_id),
+
+    CONSTRAINT fk_role_permissions_role
+        FOREIGN KEY (role_id)
+        REFERENCES roles(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_role_permissions_permission
+        FOREIGN KEY (permission_id)
+        REFERENCES permissions(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_role_permissions_permission
+    ON role_permissions(permission_id);
+
+
+-- ============================================================
+-- 4. ACCOUNTS
+-- Google-only authentication
+-- ============================================================
+
+CREATE TABLE accounts (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
     role_id TINYINT NOT NULL,
 
+    google_subject VARCHAR(255) UNIQUE,
+
     email VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255),
 
-    full_name VARCHAR(150) NOT NULL,
-    phone VARCHAR(20) UNIQUE,
+    display_name VARCHAR(150) NOT NULL,
 
-    gender VARCHAR(20),
-    date_of_birth DATE,
+    avatar_url VARCHAR(500),
 
-    created_by BIGINT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
-    CONSTRAINT fk_users_role
+    provisioned_by_account_id BIGINT NULL,
+
+    last_login_at DATETIME NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_accounts_role
         FOREIGN KEY (role_id)
         REFERENCES roles(id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
 
-    CONSTRAINT fk_users_created_by
-        FOREIGN KEY (created_by)
-        REFERENCES users(id)
+    CONSTRAINT fk_accounts_provisioned_by
+        FOREIGN KEY (provisioned_by_account_id)
+        REFERENCES accounts(id)
         ON UPDATE CASCADE
         ON DELETE SET NULL
 );
 
-CREATE INDEX idx_users_role
-    ON users(role_id);
+CREATE INDEX idx_accounts_role
+    ON accounts(role_id);
 
-CREATE INDEX idx_users_email
-    ON users(email);
-
-
--- ============================================================
--- 3. OAUTH PROVIDERS
--- Google / Facebook
--- ============================================================
-
-CREATE TABLE oauth_providers (
-    id TINYINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
-);
-
-INSERT INTO oauth_providers (name)
-VALUES
-    ('GOOGLE'),
-    ('FACEBOOK');
+CREATE INDEX idx_accounts_is_active
+    ON accounts(is_active);
 
 
 -- ============================================================
--- 4. OAUTH ACCOUNTS
--- Một account có thể liên kết Google / Facebook
--- ============================================================
-
-CREATE TABLE oauth_accounts (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-
-    user_id BIGINT NOT NULL,
-    provider_id TINYINT NOT NULL,
-    provider_user_id VARCHAR(255) NOT NULL,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT uq_oauth_provider_account
-        UNIQUE (provider_id, provider_user_id),
-
-    CONSTRAINT uq_user_provider
-        UNIQUE (user_id, provider_id),
-
-    CONSTRAINT fk_oauth_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_oauth_provider
-        FOREIGN KEY (provider_id)
-        REFERENCES oauth_providers(id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT
-);
-
-
--- ============================================================
--- 5. CUSTOMER PROFILE
--- Profile dành cho USER
+-- 5. CUSTOMER PROFILES
 -- ============================================================
 
 CREATE TABLE customer_profiles (
-    user_id BIGINT PRIMARY KEY,
+    account_id BIGINT PRIMARY KEY,
 
-    address VARCHAR(500),
-    note TEXT,
+    phone VARCHAR(30),
+
+    preferences TEXT,
+
+    internal_notes TEXT,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT fk_customer_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_customer_profiles_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 );
 
+CREATE INDEX idx_customer_profiles_phone
+    ON customer_profiles(phone);
+
 
 -- ============================================================
--- 6. STAFF PROFILE
--- Profile dành cho STAFF
+-- 6. STAFF PROFILES
 -- ============================================================
 
 CREATE TABLE staff_profiles (
-    user_id BIGINT PRIMARY KEY,
+    account_id BIGINT PRIMARY KEY,
 
     employee_code VARCHAR(50) NOT NULL UNIQUE,
 
-    is_available BOOLEAN NOT NULL DEFAULT TRUE,
+    job_title VARCHAR(100) NOT NULL,
 
-    CONSTRAINT fk_staff_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
-);
-
-
--- ============================================================
--- 7. MANAGER PROFILE
--- Profile dành cho MANAGER
--- ============================================================
-
-CREATE TABLE manager_profiles (
-    user_id BIGINT PRIMARY KEY,
-
-    employee_code VARCHAR(50) NOT NULL UNIQUE,
+    is_bookable BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT fk_manager_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_staff_profiles_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 );
 
+CREATE INDEX idx_staff_profiles_is_bookable
+    ON staff_profiles(is_bookable);
+
 
 -- ============================================================
--- 8. SPA PACKAGES
--- Các gói dịch vụ của Rosa Spa
+-- 7. SERVICES
 -- ============================================================
 
-CREATE TABLE spa_packages (
+CREATE TABLE services (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    name VARCHAR(150) NOT NULL,
+    name VARCHAR(150) NOT NULL UNIQUE,
+
+    category VARCHAR(100) NOT NULL,
+
     description TEXT,
 
-    price DECIMAL(12,2) NOT NULL,
-    duration_minutes INT NOT NULL,
+    image_url VARCHAR(500),
+
+    base_price DECIMAL(12,2) NOT NULL,
+
+    minimum_duration_minutes INT NOT NULL,
+
+    is_duration_adjustable BOOLEAN NOT NULL DEFAULT FALSE,
+
+    duration_step_minutes INT NULL,
+
+    price_per_duration_step DECIMAL(12,2) NULL,
+
+    preparation_buffer_minutes INT NOT NULL DEFAULT 0,
+
+    cleanup_buffer_minutes INT NOT NULL DEFAULT 0,
+
+    display_order INT NOT NULL DEFAULT 0,
 
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
-    CONSTRAINT chk_spa_package_price
-        CHECK (price >= 0),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT chk_spa_package_duration
-        CHECK (duration_minutes > 0)
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_services_base_price
+        CHECK (base_price >= 0),
+
+    CONSTRAINT chk_services_minimum_duration
+        CHECK (minimum_duration_minutes > 0),
+
+    CONSTRAINT chk_services_buffers
+        CHECK (
+            preparation_buffer_minutes >= 0
+            AND cleanup_buffer_minutes >= 0
+        ),
+
+    CONSTRAINT chk_services_duration_pricing
+        CHECK (
+            (
+                is_duration_adjustable = FALSE
+                AND duration_step_minutes IS NULL
+                AND price_per_duration_step IS NULL
+            )
+            OR
+            (
+                is_duration_adjustable = TRUE
+                AND duration_step_minutes > 0
+                AND price_per_duration_step >= 0
+            )
+        )
 );
 
+CREATE INDEX idx_services_catalog
+    ON services(category, is_active, display_order);
+
 
 -- ============================================================
--- 9. STAFF PACKAGE SKILLS
--- Staff nào có thể thực hiện gói dịch vụ nào
+-- 8. STAFF SERVICES
+-- Staff nào có thể làm Service nào
 -- ============================================================
 
-CREATE TABLE staff_package_skills (
-    staff_id BIGINT NOT NULL,
-    package_id BIGINT NOT NULL,
+CREATE TABLE staff_services (
+    staff_account_id BIGINT NOT NULL,
 
-    PRIMARY KEY (staff_id, package_id),
+    service_id BIGINT NOT NULL,
 
-    CONSTRAINT fk_staff_skill_staff
-        FOREIGN KEY (staff_id)
-        REFERENCES staff_profiles(user_id)
+    PRIMARY KEY (staff_account_id, service_id),
+
+    CONSTRAINT fk_staff_services_staff
+        FOREIGN KEY (staff_account_id)
+        REFERENCES staff_profiles(account_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
 
-    CONSTRAINT fk_staff_skill_package
-        FOREIGN KEY (package_id)
-        REFERENCES spa_packages(id)
+    CONSTRAINT fk_staff_services_service
+        FOREIGN KEY (service_id)
+        REFERENCES services(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_staff_skill_package
-    ON staff_package_skills(package_id);
+CREATE INDEX idx_staff_services_service
+    ON staff_services(service_id);
 
 
 -- ============================================================
--- 10. STAFF WORKING HOURS
--- Lịch làm việc mặc định của Staff
+-- 9. STAFF WORKING HOURS
 --
 -- day_of_week:
 -- 1 = Monday
--- 2 = Tuesday
 -- ...
 -- 7 = Sunday
 -- ============================================================
@@ -241,311 +287,378 @@ CREATE INDEX idx_staff_skill_package
 CREATE TABLE staff_working_hours (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    staff_id BIGINT NOT NULL,
+    staff_account_id BIGINT NOT NULL,
 
     day_of_week TINYINT NOT NULL,
 
     start_time TIME NOT NULL,
+
     end_time TIME NOT NULL,
 
-    is_working BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
-    CONSTRAINT chk_working_day
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_working_hours_day
         CHECK (day_of_week BETWEEN 1 AND 7),
 
-    CONSTRAINT chk_working_time
+    CONSTRAINT chk_working_hours_range
         CHECK (start_time < end_time),
 
+    CONSTRAINT uq_staff_working_hours
+        UNIQUE (
+            staff_account_id,
+            day_of_week,
+            start_time
+        ),
+
     CONSTRAINT fk_working_hours_staff
-        FOREIGN KEY (staff_id)
-        REFERENCES staff_profiles(user_id)
+        FOREIGN KEY (staff_account_id)
+        REFERENCES staff_profiles(account_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_working_hours_staff_day
-    ON staff_working_hours(staff_id, day_of_week);
+CREATE INDEX idx_staff_working_hours_lookup
+    ON staff_working_hours(
+        staff_account_id,
+        day_of_week,
+        is_active
+    );
 
 
 -- ============================================================
--- 11. STAFF TIME OFF
--- Thời gian Staff nghỉ / bận
+-- 10. STAFF TIME OFF
 -- ============================================================
 
 CREATE TABLE staff_time_off (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    staff_id BIGINT NOT NULL,
+    staff_account_id BIGINT NOT NULL,
 
     start_at DATETIME NOT NULL,
+
     end_at DATETIME NOT NULL,
 
     reason VARCHAR(500),
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT chk_time_off
+    CONSTRAINT chk_staff_time_off_range
         CHECK (start_at < end_at),
 
     CONSTRAINT fk_time_off_staff
-        FOREIGN KEY (staff_id)
-        REFERENCES staff_profiles(user_id)
+        FOREIGN KEY (staff_account_id)
+        REFERENCES staff_profiles(account_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_staff_time_off
-    ON staff_time_off(staff_id, start_at, end_at);
+CREATE INDEX idx_staff_time_off_range
+    ON staff_time_off(
+        staff_account_id,
+        start_at,
+        end_at
+    );
 
 
 -- ============================================================
--- 12. BOOKING STATUS
--- ============================================================
-
-CREATE TABLE booking_statuses (
-    id TINYINT AUTO_INCREMENT PRIMARY KEY,
-
-    name VARCHAR(50) NOT NULL UNIQUE,
-    description VARCHAR(255)
-);
-
-INSERT INTO booking_statuses (name, description)
-VALUES
-    ('PENDING', 'Đang chờ xác nhận'),
-    ('CONFIRMED', 'Booking đã được xác nhận'),
-    ('IN_PROGRESS', 'Staff đang thực hiện'),
-    ('COMPLETED', 'Đã hoàn thành'),
-    ('CANCELLED', 'Khách hàng hủy'),
-    ('REJECTED', 'Booking bị từ chối');
-
-
--- ============================================================
--- 13. BOOKINGS
--- Bảng chính quản lý lịch đặt Spa
+-- 11. BOOKINGS
+--
+-- booking_status:
+-- PENDING_PAYMENT
+-- PENDING
+-- CONFIRMED
+-- CHECKED_IN
+-- IN_SERVICE
+-- COMPLETED
+--
+-- assignment_source:
+-- SYSTEM
+-- CUSTOMER
+-- ADMIN
 -- ============================================================
 
 CREATE TABLE bookings (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    customer_id BIGINT NOT NULL,
-    package_id BIGINT NOT NULL,
+    booking_code VARCHAR(32) NOT NULL UNIQUE,
 
-    -- Có thể NULL khi chưa phân Staff
-    staff_id BIGINT NULL,
+    customer_account_id BIGINT NOT NULL,
 
-    status_id TINYINT NOT NULL,
+    staff_account_id BIGINT NULL,
+
+    status ENUM(
+        'PENDING_PAYMENT',
+        'PENDING',
+        'CONFIRMED',
+        'CHECKED_IN',
+        'IN_SERVICE',
+        'COMPLETED'
+    ) NOT NULL DEFAULT 'PENDING_PAYMENT',
+
+    assignment_source ENUM(
+        'SYSTEM',
+        'CUSTOMER',
+        'ADMIN'
+    ) NOT NULL DEFAULT 'SYSTEM',
+
+    customer_name_snapshot VARCHAR(150) NOT NULL,
+
+    customer_email_snapshot VARCHAR(255) NOT NULL,
+
+    customer_phone_snapshot VARCHAR(30),
 
     booking_start DATETIME NOT NULL,
+
     booking_end DATETIME NOT NULL,
 
     customer_note TEXT,
 
-    -- AUTO     = Greedy Algorithm
-    -- MANUAL   = Manager phân công
-    -- CUSTOMER = Khách hàng tự chọn Staff
-    assignment_type VARCHAR(20),
+    total_duration_minutes INT NOT NULL,
 
-    assigned_by_manager_id BIGINT NULL,
+    total_amount DECIMAL(12,2) NOT NULL,
+
+    checked_in_at DATETIME NULL,
+
+    service_started_at DATETIME NULL,
+
+    completed_at DATETIME NULL,
+
+    created_by_account_id BIGINT NOT NULL,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    updated_at TIMESTAMP NOT NULL
-        DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT chk_booking_time
+    CONSTRAINT chk_bookings_time_range
         CHECK (booking_start < booking_end),
 
-    CONSTRAINT chk_assignment_type
-        CHECK (
-            assignment_type IS NULL
-            OR assignment_type IN ('AUTO', 'MANUAL', 'CUSTOMER')
-        ),
+    CONSTRAINT chk_bookings_total_duration
+        CHECK (total_duration_minutes > 0),
 
-    CONSTRAINT fk_booking_customer
-        FOREIGN KEY (customer_id)
-        REFERENCES customer_profiles(user_id)
+    CONSTRAINT chk_bookings_total_amount
+        CHECK (total_amount >= 0),
+
+    CONSTRAINT fk_bookings_customer
+        FOREIGN KEY (customer_account_id)
+        REFERENCES customer_profiles(account_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
 
-    CONSTRAINT fk_booking_package
-        FOREIGN KEY (package_id)
-        REFERENCES spa_packages(id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_booking_staff
-        FOREIGN KEY (staff_id)
-        REFERENCES staff_profiles(user_id)
+    CONSTRAINT fk_bookings_staff
+        FOREIGN KEY (staff_account_id)
+        REFERENCES staff_profiles(account_id)
         ON UPDATE CASCADE
         ON DELETE SET NULL,
 
-    CONSTRAINT fk_booking_status
-        FOREIGN KEY (status_id)
-        REFERENCES booking_statuses(id)
+    CONSTRAINT fk_bookings_created_by
+        FOREIGN KEY (created_by_account_id)
+        REFERENCES accounts(id)
         ON UPDATE CASCADE
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_booking_manager
-        FOREIGN KEY (assigned_by_manager_id)
-        REFERENCES manager_profiles(user_id)
-        ON UPDATE CASCADE
-        ON DELETE SET NULL
+        ON DELETE RESTRICT
 );
 
-CREATE INDEX idx_booking_customer
-    ON bookings(customer_id);
+CREATE INDEX idx_bookings_customer_start
+    ON bookings(
+        customer_account_id,
+        booking_start
+    );
 
-CREATE INDEX idx_booking_staff
-    ON bookings(staff_id);
+CREATE INDEX idx_bookings_staff_calendar
+    ON bookings(
+        staff_account_id,
+        booking_start,
+        booking_end
+    );
 
-CREATE INDEX idx_booking_package
-    ON bookings(package_id);
-
-CREATE INDEX idx_booking_status
-    ON bookings(status_id);
-
-CREATE INDEX idx_booking_time
-    ON bookings(booking_start, booking_end);
-
-CREATE INDEX idx_booking_staff_calendar
-    ON bookings(staff_id, booking_start, booking_end);
+CREATE INDEX idx_bookings_status_start
+    ON bookings(
+        status,
+        booking_start
+    );
 
 
 -- ============================================================
--- 14. BOOKING STATUS HISTORY
--- Lưu lịch sử thay đổi trạng thái Booking
+-- 12. BOOKING ITEMS
+-- Một Booking có thể chứa nhiều Service
 -- ============================================================
 
-CREATE TABLE booking_status_history (
+CREATE TABLE booking_items (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
     booking_id BIGINT NOT NULL,
 
-    old_status_id TINYINT NULL,
-    new_status_id TINYINT NOT NULL,
+    service_id BIGINT NOT NULL,
 
-    changed_by BIGINT NULL,
+    service_name_snapshot VARCHAR(150) NOT NULL,
 
-    note VARCHAR(500),
+    duration_minutes INT NOT NULL,
 
-    changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    base_price_snapshot DECIMAL(12,2) NOT NULL,
 
-    CONSTRAINT fk_booking_history_booking
-        FOREIGN KEY (booking_id)
-        REFERENCES bookings(id)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE,
+    additional_duration_steps INT NOT NULL DEFAULT 0,
 
-    CONSTRAINT fk_booking_history_old_status
-        FOREIGN KEY (old_status_id)
-        REFERENCES booking_statuses(id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT,
+    price_per_step_snapshot DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
 
-    CONSTRAINT fk_booking_history_new_status
-        FOREIGN KEY (new_status_id)
-        REFERENCES booking_statuses(id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_booking_history_user
-        FOREIGN KEY (changed_by)
-        REFERENCES users(id)
-        ON UPDATE CASCADE
-        ON DELETE SET NULL
-);
-
-CREATE INDEX idx_booking_history_booking
-    ON booking_status_history(booking_id);
-
-
--- ============================================================
--- 15. TASK STATUS
--- ============================================================
-
-CREATE TABLE task_statuses (
-    id TINYINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
-);
-
-INSERT INTO task_statuses (name)
-VALUES
-    ('ASSIGNED'),
-    ('ACCEPTED'),
-    ('IN_PROGRESS'),
-    ('COMPLETED'),
-    ('REJECTED');
-
-
--- ============================================================
--- 16. STAFF TASKS
--- Task được giao cho Staff từ Booking
--- ============================================================
-
-CREATE TABLE staff_tasks (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-
-    booking_id BIGINT NOT NULL UNIQUE,
-
-    status_id TINYINT NOT NULL,
-
-    assigned_by_manager_id BIGINT NULL,
-
-    accepted_at DATETIME NULL,
-    started_at DATETIME NULL,
-    completed_at DATETIME NULL,
-
-    staff_note TEXT,
+    line_amount DECIMAL(12,2) NOT NULL,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    updated_at TIMESTAMP NOT NULL
-        DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_booking_items_booking_service
+        UNIQUE (booking_id, service_id),
 
-    CONSTRAINT fk_task_booking
+    CONSTRAINT chk_booking_items_duration
+        CHECK (duration_minutes > 0),
+
+    CONSTRAINT chk_booking_items_prices
+        CHECK (
+            base_price_snapshot >= 0
+            AND price_per_step_snapshot >= 0
+        ),
+
+    CONSTRAINT chk_booking_items_steps
+        CHECK (additional_duration_steps >= 0),
+
+    CONSTRAINT chk_booking_items_line_amount
+        CHECK (line_amount >= 0),
+
+    CONSTRAINT fk_booking_items_booking
         FOREIGN KEY (booking_id)
         REFERENCES bookings(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
 
-    CONSTRAINT fk_task_status
-        FOREIGN KEY (status_id)
-        REFERENCES task_statuses(id)
+    CONSTRAINT fk_booking_items_service
+        FOREIGN KEY (service_id)
+        REFERENCES services(id)
         ON UPDATE CASCADE
-        ON DELETE RESTRICT,
+        ON DELETE RESTRICT
+);
 
-    CONSTRAINT fk_task_manager
-        FOREIGN KEY (assigned_by_manager_id)
-        REFERENCES manager_profiles(user_id)
+CREATE INDEX idx_booking_items_service
+    ON booking_items(service_id);
+
+
+-- ============================================================
+-- 13. BOOKING EVENTS
+--
+-- event_type examples:
+-- CREATED
+-- PAYMENT_RECEIVED
+-- EMAIL_SENT
+-- RESCHEDULED
+-- CHECKED_IN
+-- SERVICE_STARTED
+-- COMPLETED
+-- STAFF_ASSIGNED
+-- ============================================================
+
+CREATE TABLE booking_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    booking_id BIGINT NOT NULL,
+
+    event_type VARCHAR(50) NOT NULL,
+
+    actor_account_id BIGINT NULL,
+
+    message VARCHAR(500) NOT NULL,
+
+    occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_booking_events_booking
+        FOREIGN KEY (booking_id)
+        REFERENCES bookings(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_booking_events_actor
+        FOREIGN KEY (actor_account_id)
+        REFERENCES accounts(id)
         ON UPDATE CASCADE
         ON DELETE SET NULL
 );
 
+CREATE INDEX idx_booking_events_booking_time
+    ON booking_events(
+        booking_id,
+        occurred_at
+    );
+
 
 -- ============================================================
--- 17. FEEDBACK RATINGS
--- 5 mức đánh giá
+-- 14. PAYMENTS
+--
+-- payment_status:
+-- UNPAID
+-- PAID
+-- FAILED
+-- REFUNDED
+--
+-- payment_method:
+-- QR
+-- CARD
+-- AT_SPA
 -- ============================================================
 
-CREATE TABLE feedback_ratings (
-    id TINYINT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
+CREATE TABLE payments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    transaction_code VARCHAR(32) NOT NULL UNIQUE,
+
+    booking_id BIGINT NOT NULL UNIQUE,
+
+    status ENUM(
+        'UNPAID',
+        'PAID',
+        'FAILED',
+        'REFUNDED'
+    ) NOT NULL DEFAULT 'UNPAID',
+
+    method ENUM(
+        'QR',
+        'CARD',
+        'AT_SPA'
+    ) NOT NULL,
+
+    amount DECIMAL(12,2) NOT NULL,
+
+    qr_payload TEXT,
+
+    paid_at DATETIME NULL,
+
+    refunded_at DATETIME NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_payments_amount
+        CHECK (amount >= 0),
+
+    CONSTRAINT fk_payments_booking
+        FOREIGN KEY (booking_id)
+        REFERENCES bookings(id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
 );
 
-INSERT INTO feedback_ratings (id, name)
-VALUES
-    (1, 'CỰC TỆ'),
-    (2, 'TỆ'),
-    (3, 'BÌNH THƯỜNG'),
-    (4, 'TỐT'),
-    (5, 'XUẤT SẮC');
+CREATE INDEX idx_payments_status_method_created
+    ON payments(
+        status,
+        method,
+        created_at
+    );
 
 
 -- ============================================================
--- 18. FEEDBACK
--- Mỗi Booking được Feedback tối đa 1 lần
+-- 15. FEEDBACK
+-- Rating từ 1 đến 5
+-- Một Booking có tối đa một Feedback
 -- ============================================================
 
 CREATE TABLE feedback (
@@ -553,130 +666,30 @@ CREATE TABLE feedback (
 
     booking_id BIGINT NOT NULL UNIQUE,
 
-    rating_id TINYINT NOT NULL,
+    rating TINYINT NOT NULL,
 
     comment TEXT,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    updated_at TIMESTAMP NOT NULL
-        DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_feedback_rating
+        CHECK (rating BETWEEN 1 AND 5),
 
     CONSTRAINT fk_feedback_booking
         FOREIGN KEY (booking_id)
         REFERENCES bookings(id)
         ON UPDATE CASCADE
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_feedback_rating
-        FOREIGN KEY (rating_id)
-        REFERENCES feedback_ratings(id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT
-);
-
-CREATE INDEX idx_feedback_rating
-    ON feedback(rating_id);
-
-
--- ============================================================
--- 19. ATTENDANCE
--- Staff chấm công
--- ============================================================
-
-CREATE TABLE attendance (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-
-    staff_id BIGINT NOT NULL,
-
-    work_date DATE NOT NULL,
-
-    check_in DATETIME NULL,
-    check_out DATETIME NULL,
-
-    note VARCHAR(500),
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT uq_attendance_staff_date
-        UNIQUE (staff_id, work_date),
-
-    CONSTRAINT chk_attendance_time
-        CHECK (
-            check_out IS NULL
-            OR check_in IS NULL
-            OR check_out >= check_in
-        ),
-
-    CONSTRAINT fk_attendance_staff
-        FOREIGN KEY (staff_id)
-        REFERENCES staff_profiles(user_id)
-        ON UPDATE CASCADE
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_attendance_date
-    ON attendance(work_date);
+CREATE INDEX idx_feedback_rating
+    ON feedback(rating);
 
 
 -- ============================================================
--- 20. SITE CONTENT
--- Nội dung Landing Page
--- MySQL lưu dữ liệu chính, Redis dùng để Cache
+-- DATABASE CREATED
 -- ============================================================
 
--- CREATE TABLE site_content (
---     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-
---     section_key VARCHAR(100) NOT NULL UNIQUE,
-
---     title VARCHAR(255),
---     content TEXT,
---     image_url VARCHAR(500),
-
---     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-
---     updated_by BIGINT NULL,
-
---     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
---     updated_at TIMESTAMP NOT NULL
---         DEFAULT CURRENT_TIMESTAMP
---         ON UPDATE CURRENT_TIMESTAMP,
-
---     CONSTRAINT fk_site_content_manager
---         FOREIGN KEY (updated_by)
---         REFERENCES manager_profiles(user_id)
---         ON UPDATE CASCADE
---         ON DELETE SET NULL
--- );
-
-
--- ============================================================
--- DEFAULT LANDING PAGE CONTENT
--- ============================================================
-
-INSERT INTO site_content (section_key, title, content)
-VALUES
-    (
-        'ABOUT',
-        'Về Rosa',
-        'Giới thiệu về Rosa Spa'
-    ),
-    (
-        'TEAM',
-        'Đội ngũ',
-        'Đội ngũ chuyên viên của Rosa Spa'
-    ),
-    (
-        'FEEDBACK',
-        'Feedback',
-        'Đánh giá của khách hàng'
-    ),
-    (
-        'CONTACT',
-        'Liên hệ',
-        'Thông tin liên hệ Rosa Spa'
-
-    );
+SELECT 'lunara_spa created successfully' AS message;

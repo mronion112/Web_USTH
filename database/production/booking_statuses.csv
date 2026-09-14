@@ -1,7 +1,0 @@
-﻿id,name,description
-1,PENDING,Đang chờ xác nhận
-2,CONFIRMED,Booking đã được xác nhận
-3,IN_PROGRESS,Staff đang thực hiện
-4,COMPLETED,Đã hoàn thành
-5,CANCELLED,Khách hàng hủy
-6,REJECTED,Booking bị từ chối

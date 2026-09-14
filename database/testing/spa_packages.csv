@@ -1,8 +1,0 @@
-﻿id,name,description,price,duration_minutes,is_active
-1,Massage thư giãn,Massage toàn thân giúp thư giãn cơ bắp và giảm căng thẳng.,300000.00,60,1
-2,Chăm sóc da mặt cơ bản,"Làm sạch, tẩy tế bào chết và dưỡng ẩm da mặt.",250000.00,45,1
-3,Chăm sóc da chuyên sâu,Liệu trình chăm sóc da chuyên sâu theo tình trạng da.,450000.00,90,1
-4,Gội đầu dưỡng sinh,"Gội đầu kết hợp massage đầu, cổ và vai gáy.",180000.00,45,1
-5,Massage đá nóng,Massage kết hợp đá nóng giúp thư giãn sâu.,420000.00,90,1
-6,Massage chân,Massage bàn chân và cẳng chân.,200000.00,45,1
-7,Liệu trình thử nghiệm cũ,Gói cũ đã ngừng nhận booking.,150000.00,30,0
