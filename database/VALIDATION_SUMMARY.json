@@ -1,0 +1,94 @@
+{
+  "production": {
+    "tables": {
+      "roles": 3,
+      "users": 115,
+      "oauth_providers": 2,
+      "oauth_accounts": 21,
+      "customer_profiles": 100,
+      "staff_profiles": 12,
+      "manager_profiles": 3,
+      "spa_packages": 10,
+      "staff_package_skills": 66,
+      "staff_working_hours": 84,
+      "staff_time_off": 18,
+      "booking_statuses": 6,
+      "bookings": 220,
+      "booking_status_history": 680,
+      "task_statuses": 5,
+      "staff_tasks": 200,
+      "feedback_ratings": 5,
+      "feedback": 76,
+      "attendance": 249,
+      "site_content": 4
+    },
+    "validation_errors": [],
+    "booking_status_counts": {
+      "4": 110,
+      "1": 20,
+      "5": 30,
+      "2": 35,
+      "6": 15,
+      "3": 10
+    },
+    "assignment_type_counts": {
+      "MANUAL": 67,
+      "CUSTOMER": 68,
+      "AUTO": 65,
+      "NULL": 20
+    },
+    "feedback_rating_counts": {
+      "5": 35,
+      "3": 10,
+      "4": 29,
+      "2": 1,
+      "1": 1
+    }
+  },
+  "testing": {
+    "tables": {
+      "roles": 3,
+      "users": 15,
+      "oauth_providers": 2,
+      "oauth_accounts": 4,
+      "customer_profiles": 10,
+      "staff_profiles": 4,
+      "manager_profiles": 1,
+      "spa_packages": 7,
+      "staff_package_skills": 20,
+      "staff_working_hours": 28,
+      "staff_time_off": 4,
+      "booking_statuses": 6,
+      "bookings": 24,
+      "booking_status_history": 61,
+      "task_statuses": 5,
+      "staff_tasks": 20,
+      "feedback_ratings": 5,
+      "feedback": 5,
+      "attendance": 28,
+      "site_content": 4
+    },
+    "validation_errors": [],
+    "booking_status_counts": {
+      "3": 4,
+      "6": 4,
+      "2": 4,
+      "4": 5,
+      "1": 4,
+      "5": 3
+    },
+    "assignment_type_counts": {
+      "MANUAL": 8,
+      "NULL": 4,
+      "AUTO": 6,
+      "CUSTOMER": 6
+    },
+    "feedback_rating_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1
+    }
+  }
+}
