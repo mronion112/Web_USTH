@@ -1,12 +1,14 @@
-# Local stack: MySQL + Spring Boot backend + React frontend.
+# Stack local: MySQL + Spring Boot backend + React frontend.
 #
-# Run from the repository root:
+# Quy tắc DB: database/Web_DataBase_USTH.sql là template cố định chỉ DDL.
+# Data do code nạp qua factory/fixture, không seed sẵn trong compose.
+#
+# Chạy từ thư mục gốc:
 #   cp templates/.env.example templates/.env
 #   docker compose -f templates/docker-compose.yml up
 #
-# Default startup launches only the database, because application
-# code is owned by other members and not present yet. Once backend/app and
-# frontend/app contain a Dockerfile, start everything with:
+# Mặc định chỉ khởi động DB template, chưa có data.
+# Khi backend/app và frontend/app đã có Dockerfile, chạy full stack:
 #   docker compose -f templates/docker-compose.yml --profile app up --build
 
 name: lunara-spa
@@ -16,10 +18,10 @@ services:
     image: mysql:8.4
     env_file: .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?thiếu trong .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-lunara_spa}
       MYSQL_USER: ${MYSQL_USER:-lunara}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?thiếu trong .env}
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:
@@ -42,8 +44,8 @@ services:
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://db:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-lunara}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?set in .env}
-      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?thiếu trong .env}
+      JWT_SECRET: ${JWT_SECRET:?thiếu trong .env}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
