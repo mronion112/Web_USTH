@@ -1,0 +1,84 @@
+# Runs on every push and pull request. The db-validate job always runs.
+# The build-test job activates automatically once application code lands
+# in backend/app (Spring Boot) or frontend/app (React).
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  db-validate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import schema
+        env:
+          MYSQL_PWD: test-root
+        run: mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
+
+      - name: Check expected tables
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          mapfile -t EXPECTED < database/expected_tables.txt
+          ACTUAL=$(mysql -h127.0.0.1 -uroot -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='lunara_spa';")
+          MISSING=0
+          for table in "${EXPECTED[@]}"; do
+            if ! grep -qx "$table" <<< "$ACTUAL"; then
+              echo "Missing table: $table"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Database OK: ${#EXPECTED[@]} expected tables present."
+
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        if: hashFiles('backend/app/pom.xml') != ''
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Test backend
+        if: hashFiles('backend/app/pom.xml') != ''
+        run: mvn -B -f backend/app/pom.xml test
+
+      - name: Set up Node
+        if: hashFiles('frontend/app/package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build frontend
+        if: hashFiles('frontend/app/package.json') != ''
+        run: |
+          cd frontend/app
+          npm ci
+          npm run build
+
+      - name: Report skipped builds
+        if: hashFiles('backend/app/pom.xml') == '' && hashFiles('frontend/app/package.json') == ''
+        run: echo "No application code yet; only db-validate ran."
