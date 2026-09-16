@@ -1,4 +1,4 @@
-package com.kevin.lunaraspa.controller;
+package com.kevin.lunaraspa.profiles;
 
 import com.kevin.lunaraspa.core.http.ResponseBuilder;
 import com.kevin.lunaraspa.profiles.dto.ProfileUpdateRequest;
