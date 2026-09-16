@@ -1,6 +1,6 @@
 # Chạy trên mọi push và pull request. Job db-validate luôn chạy.
 # Job build-test tự kích hoạt khi code ứng dụng xuất hiện
-# tại backend/app (Spring Boot) hoặc frontend/app (React).
+# tại backend (Spring Boot) hoặc frontend/lunara (React).
 
 name: CI
 
@@ -51,34 +51,74 @@ jobs:
 
   build-test:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
 
+      - name: Nạp schema cho test
+        if: hashFiles('backend/pom.xml') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
+
       - name: Cài Java
-        if: hashFiles('backend/app/pom.xml') != ''
+        if: hashFiles('backend/pom.xml') != ''
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
 
       - name: Test backend
-        if: hashFiles('backend/app/pom.xml') != ''
-        run: mvn -B -f backend/app/pom.xml test
+        if: hashFiles('backend/pom.xml') != ''
+        env:
+          BACKEND_PORT: 8080
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: test-root
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          JWT_SECRET: test-secret-0123456789abcdef-0123456789abcdef
+          JWT_EXPIRATION_MS: 86400000
+          GOOGLE_CLIENT_ID: test-client-id
+          GOOGLE_CLIENT_SECRET: test-client-secret
+          FRONTEND_URL: http://localhost:5173
+        run: mvn -B -f backend/pom.xml test
 
       - name: Cài Node
-        if: hashFiles('frontend/app/package.json') != ''
+        if: hashFiles('frontend/lunara/package.json') != ''
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
 
       - name: Build frontend
-        if: hashFiles('frontend/app/package.json') != ''
+        if: hashFiles('frontend/lunara/package.json') != ''
         run: |
-          cd frontend/app
+          cd frontend/lunara
           npm ci
           npm run build
 
       - name: Báo cáo bỏ qua build
-        if: hashFiles('backend/app/pom.xml') == '' && hashFiles('frontend/app/package.json') == ''
+        if: hashFiles('backend/pom.xml') == '' && hashFiles('frontend/lunara/package.json') == ''
         run: echo "Chưa có code ứng dụng, chỉ chạy db-validate."

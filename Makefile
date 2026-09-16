@@ -10,12 +10,15 @@ MYSQL_DATABASE := $(or $(shell grep -E '^MYSQL_DATABASE=' $(ENV_FILE) 2>/dev/nul
 
 TABLES = $(shell cat database/expected_tables.txt)
 
+# Biến bắt buộc trong templates/.env, khớp application.yml (không fallback).
+REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET FRONTEND_URL BACKEND_PORT
+
 .PHONY: help check-env up up-app down logs seed schema validate test-backend
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động stack local (DB template, chưa có data)"
-	@echo "  up-app       Khởi động full stack (database, backend, frontend)"
+	@echo "  up           Khởi động stack local (DB template + Redis, chưa có data)"
+	@echo "  up-app       Khởi động full stack (database, redis, backend, frontend)"
 	@echo "  down         Dừng stack local"
 	@echo "  logs         Xem log, ví dụ: make logs SERVICE=db"
 	@echo "  seed         Nạp lại schema template database/Web_DataBase_USTH.sql (không kèm data)"
@@ -25,6 +28,11 @@ help:
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "Thiếu $(ENV_FILE). Chạy: cp templates/.env.example $(ENV_FILE)" >&2; exit 1)
+	@missing=""; \
+	for v in $(REQUIRED_VARS); do \
+		if ! grep -qE "^$$v=.+" $(ENV_FILE); then missing="$$missing $$v"; fi; \
+	done; \
+	if [ -n "$$missing" ]; then echo "Thiếu biến trong $(ENV_FILE):$$missing" >&2; exit 1; fi
 
 up: check-env
 	$(COMPOSE) up -d
@@ -62,8 +70,8 @@ validate: check-env
 	echo "Database OK: đủ $(words $(TABLES)) bảng theo kỳ vọng."
 
 test-backend:
-	@if [ -f backend/app/pom.xml ]; then \
-		mvn -B -f backend/app/pom.xml test; \
+	@if [ -f backend/pom.xml ]; then \
+		mvn -B -f backend/pom.xml test; \
 	else \
 		echo "Chưa có code backend, đã bỏ qua."; \
 	fi
