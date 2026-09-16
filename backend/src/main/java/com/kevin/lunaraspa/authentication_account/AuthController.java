@@ -31,4 +31,8 @@ public class AuthController {
         authService.logout(authHeader, request);
         return ResponseBuilder.ok(Map.of("message", "Logged out successfully"));
     }
+    @PostMapping("/exchange")
+    public ResponseEntity<Object> exchangeToken(@RequestBody Map<String, String> request) {
+        return ResponseBuilder.ok(authService.exchangeToken(request));
+    }
 }

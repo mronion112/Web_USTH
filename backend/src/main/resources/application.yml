@@ -1,4 +1,4 @@
-spring.config.import: optional:file:.env[.local]
+spring.config.import: optional:file:.env.properties,optional:file:backend/.env.properties
 
 server:
   port: ${BACKEND_PORT}
@@ -33,7 +33,7 @@ spring:
             scope: email, profile
 
 app:
-  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  frontend-url: ${FRONTEND_URL}
   jwt:
     secret: ${JWT_SECRET}
     access-expiration-ms: ${JWT_EXPIRATION_MS}

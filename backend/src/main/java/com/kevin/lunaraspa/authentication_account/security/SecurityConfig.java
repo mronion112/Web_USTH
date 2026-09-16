@@ -31,7 +31,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/me").authenticated()
                 .anyRequest().access(customAuthorizationManager)
             )
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .oauth2Login(oauth2 -> oauth2
                 .authorizationEndpoint(auth -> auth.baseUri("/oauth2/authorization"))
                 .redirectionEndpoint(redir -> redir.baseUri("/login/oauth2/code/*"))

@@ -11,6 +11,7 @@ import com.kevin.lunaraspa.authentication_account.security.SecurityUtils;
 import com.kevin.lunaraspa.authentication_account.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtils jwtUtils;
     private final JwtBlacklistService jwtBlacklistService;
     private final AccountRepository accountRepository;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     public AccountResponseDTO getMe() {
@@ -65,7 +67,7 @@ public class AuthServiceImpl implements AuthService {
         if (jwtUtils.isTokenExpired(refreshToken)) {
             throw new AppException(AuthErrorCode.TOKEN_EXPIRED);
         }
-        
+
         String email = jwtUtils.extractEmail(refreshToken);
         String role = jwtUtils.extractRole(refreshToken);
         String newAccessToken = jwtUtils.generateAccessToken(email, role);
@@ -83,5 +85,27 @@ public class AuthServiceImpl implements AuthService {
             String refreshToken = request.get("refreshToken");
             jwtBlacklistService.blacklistToken(refreshToken);
         }
+    }
+    @Override
+    public Map<String, String> exchangeToken(Map<String, String> request) {
+        String code = request.get("code");
+        if (code == null || code.isBlank()) {
+            throw new AppException(AuthErrorCode.INVALID_TOKEN);
+        }
+        String accessKey = "oauth2:authCode:" + code + ":access";
+        String refreshKey = "oauth2:authCode:" + code + ":refresh";
+        
+        String accessToken = redisTemplate.opsForValue().get(accessKey);
+        String refreshToken = redisTemplate.opsForValue().get(refreshKey);
+        
+        if (accessToken == null || refreshToken == null) {
+            throw new AppException(AuthErrorCode.INVALID_TOKEN);
+        }
+        
+        // Delete after single use
+        redisTemplate.delete(accessKey);
+        redisTemplate.delete(refreshKey);
+        
+        return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 }

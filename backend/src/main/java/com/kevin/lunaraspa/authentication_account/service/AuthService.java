@@ -9,4 +9,5 @@ public interface AuthService {
     java.util.List<AccountResponseDTO> getAllAccounts();
     Map<String, String> refreshToken(Map<String, String> request);
     void logout(String authHeader, Map<String, String> request);
+    Map<String, String> exchangeToken(Map<String, String> request);
 }
