@@ -1,0 +1,7 @@
+/target/
+/.idea/
+*.iml
+.env
+client_secret*.json
+*google*credentials*.json
+oauth-client.md
