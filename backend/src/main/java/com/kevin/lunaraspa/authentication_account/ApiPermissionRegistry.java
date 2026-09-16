@@ -1,4 +1,4 @@
-package com.kevin.lunaraspa.feature.authentication_account;
+package com.kevin.lunaraspa.authentication_account;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;

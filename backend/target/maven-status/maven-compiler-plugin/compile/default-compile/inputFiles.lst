@@ -1,4 +1,8 @@
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/LunaraSpaApplication.java
+/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/authentication_account/ApiPermissionRegistry.java
+/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/authentication_account/AuthController.java
+/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/authentication_account/CustomAuthorizationManager.java
+/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/authentication_account/RolePermissionService.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/config/RedisConfig.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/controller/ProfileController.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/core/common/model/Pagination.java
@@ -28,10 +32,6 @@
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/entity/Permission.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/entity/Role.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/entity/StaffProfile.java
-/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/feature/authentication_account/ApiPermissionRegistry.java
-/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/feature/authentication_account/AuthController.java
-/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/feature/authentication_account/CustomAuthorizationManager.java
-/home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/feature/authentication_account/RolePermissionService.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/repository/AccountRepository.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/repository/CustomerProfileRepository.java
 /home/hoang-vu/code/Web_USTH/backend/src/main/java/com/kevin/lunaraspa/repository/PermissionRepository.java

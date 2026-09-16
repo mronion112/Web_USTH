@@ -1,7 +1,7 @@
 package com.kevin.lunaraspa.security;
 
 import lombok.RequiredArgsConstructor;
-import com.kevin.lunaraspa.feature.authentication_account.CustomAuthorizationManager;
+import com.kevin.lunaraspa.authentication_account.CustomAuthorizationManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;

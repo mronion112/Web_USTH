@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # 1. Database (Dùng chung 1 Server nhưng tự động chia nhiều Schema)
+  mysql-server:
+    image: mysql:8.0
+    container_name: lunara_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      # Không dùng MYSQL_DATABASE vì ta cần tạo nhiều DB
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Script tự động chạy khi DB khởi tạo lần đầu
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # 2. Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: lunara_redis
+    ports:
+      - "6379:6379"
+
+  # ==========================================
+  # PHẦN MICROSERVICES (Chỉ chạy khi có file .jar)
+  # ==========================================
+  
+  # 3. API Gateway
+  api-gateway:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunara_api_gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql-server:
+        condition: service_healthy
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  # 4. Auth Service
+  auth-service:
+    build: 
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: lunara_auth_service
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql-server:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+volumes:
+  mysql_data:

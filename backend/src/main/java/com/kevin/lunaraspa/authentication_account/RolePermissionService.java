@@ -1,4 +1,4 @@
-package com.kevin.lunaraspa.feature.authentication_account;
+package com.kevin.lunaraspa.authentication_account;
 
 import com.kevin.lunaraspa.entity.Permission;
 import com.kevin.lunaraspa.repository.RoleRepository;
