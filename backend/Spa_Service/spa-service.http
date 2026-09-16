@@ -1,0 +1,43 @@
+@baseUrl = http://localhost:8080
+
+### List active services
+GET {{baseUrl}}/api/services
+Accept: application/json
+
+### Get active service detail
+GET {{baseUrl}}/api/services/1
+Accept: application/json
+
+### Create service
+# Authentication/authorization header will be added after the Authentication feature is integrated.
+POST {{baseUrl}}/api/manager/services
+Content-Type: application/json
+
+{
+  "name": "Facial Care",
+  "category": "FACIAL",
+  "description": "Chăm sóc da mặt",
+  "basePrice": 350000,
+  "minimumDurationMinutes": 60,
+  "isDurationAdjustable": true,
+  "durationStepMinutes": 30,
+  "pricePerDurationStep": 120000,
+  "preparationBufferMinutes": 10,
+  "cleanupBufferMinutes": 10
+}
+
+### Invalid duration configuration (expected 400)
+POST {{baseUrl}}/api/manager/services
+Content-Type: application/json
+
+{
+  "name": "Invalid Fixed Service",
+  "category": "FACIAL",
+  "basePrice": 100000,
+  "minimumDurationMinutes": 60,
+  "isDurationAdjustable": false,
+  "durationStepMinutes": 30,
+  "pricePerDurationStep": 50000,
+  "preparationBufferMinutes": 0,
+  "cleanupBufferMinutes": 0
+}
