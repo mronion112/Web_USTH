@@ -22,6 +22,9 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
     private final JwtUtils jwtUtils;
     private final AccountRepository accountRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${FRONTEND_URL:http://localhost:3000}")
+    private String frontendUrl;
+
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
@@ -35,7 +38,8 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         String accessToken = jwtUtils.generateAccessToken(email, role);
         String refreshToken = jwtUtils.generateRefreshToken(email, role);
 
-        String redirectUrl = String.format("http://localhost:3000/oauth2/redirect?token=%s&refreshToken=%s", 
+        String redirectUrl = String.format("%s/oauth2/redirect?token=%s&refreshToken=%s", 
+                frontendUrl,
                 URLEncoder.encode(accessToken, StandardCharsets.UTF_8), 
                 URLEncoder.encode(refreshToken, StandardCharsets.UTF_8));
 

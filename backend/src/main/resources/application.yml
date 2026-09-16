@@ -33,6 +33,7 @@ spring:
             scope: email, profile
 
 app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
   jwt:
     secret: ${JWT_SECRET}
     access-expiration-ms: ${JWT_EXPIRATION_MS}
