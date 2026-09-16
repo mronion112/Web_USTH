@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Clock, ArrowUpRight, Sparkles } from 'lucide-react';
 import { MOCK_SERVICES } from '@/data/mock-services';
+import { TiltCard } from '@/components/transitions/TiltCard';
 
 export const ServicesCollection: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -51,9 +52,10 @@ export const ServicesCollection: React.FC = () => {
         {/* 3-Column Luxury Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredServices.map((service) => (
-            <div
+            <TiltCard
               key={service.id}
-              className="group relative flex flex-col rounded-3xl bg-white border border-[#E2E8E3] overflow-hidden shadow-luxury hover:shadow-luxury-hover transition-all duration-300"
+              maxTilt={8}
+              cardClassName="group relative flex flex-col rounded-3xl bg-white border border-[#E2E8E3] overflow-hidden shadow-luxury hover:shadow-luxury-hover transition-shadow duration-300"
             >
               {/* Photo Area with Top Badges */}
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#EDEEEA]">
@@ -111,7 +113,7 @@ export const ServicesCollection: React.FC = () => {
                   </Button>
                 </div>
               </div>
-            </div>
+            </TiltCard>
           ))}
         </div>
       </div>

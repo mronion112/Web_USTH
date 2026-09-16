@@ -20,7 +20,7 @@ export const MOCK_PAYMENTS: Payment[] = [
     bookingCode: 'LNR-002',
     customerName: 'Trần Thị Bích',
     status: 'PAID',
-    method: 'CARD',
+    method: 'QR',
     amount: 350000,
     paidAt: '2026-09-14 13:52:00',
     createdAt: '2026-09-14 13:45:00'
@@ -43,7 +43,7 @@ export const MOCK_PAYMENTS: Payment[] = [
     bookingCode: 'LNR-004',
     customerName: 'Phạm Hồng Đức',
     status: 'UNPAID',
-    method: 'AT_SPA',
+    method: 'QR',
     amount: 500000,
     createdAt: '2026-09-14 14:10:00'
   },
@@ -58,5 +58,30 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 1200000,
     paidAt: '2026-09-14 09:45:00',
     createdAt: '2026-09-14 09:30:00'
+  },
+  {
+    id: 'pay-6',
+    transactionCode: 'TX-006',
+    bookingId: 'b-006',
+    bookingCode: 'LNR-006',
+    customerName: 'Vũ Quốc Khánh',
+    status: 'PAID',
+    method: 'QR',
+    amount: 850000,
+    paidAt: '2026-09-14 11:20:00',
+    createdAt: '2026-09-14 11:05:00'
+  },
+  {
+    id: 'pay-7',
+    transactionCode: 'TX-007',
+    bookingId: 'b-007',
+    bookingCode: 'LNR-007',
+    customerName: 'Đặng Thùy Dương',
+    status: 'REFUNDED',
+    method: 'QR',
+    amount: 450000,
+    paidAt: '2026-09-14 08:30:00',
+    refundedAt: '2026-09-14 09:10:00',
+    createdAt: '2026-09-14 08:15:00'
   }
 ];

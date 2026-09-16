@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Calendar } from '@/components/ui/calendar';
@@ -8,8 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import { MOCK_SERVICES } from '@/data/mock-services';
-import { MOCK_STAFF } from '@/data/mock-staff';
+import { api, ApiBooking, ApiService, PublicStaff, json, events } from '@/lib/api';
 import {
   Clock,
   User,
@@ -33,54 +32,64 @@ export const BookingPage: React.FC = () => {
   const { user } = useAuth();
 
   // Customer Form State
-  const [customerName, setCustomerName] = useState(user?.displayName || 'Nguyễn Văn An');
-  const [customerPhone, setCustomerPhone] = useState('0912 345 678');
-  const [customerEmail, setCustomerEmail] = useState(user?.email || 'nguyen.an@gmail.com');
-  const [customerNote, setCustomerNote] = useState('Ưu tiên phòng yên tĩnh, lực massage vừa phải.');
+  const [customerName, setCustomerName] = useState(user?.displayName || '');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerNote, setCustomerNote] = useState('');
+  const [services, setServices] = useState<ApiService[]>([]);
+  const [staff, setStaff] = useState<PublicStaff[]>([]);
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const submission = useRef<{ signature: string; key: string } | null>(null);
+  const [availabilityTick, setAvailabilityTick] = useState(0);
+  useEffect(() => { if (user) setCustomerName(user.displayName); }, [user]);
+  useEffect(() => {
+    api<ApiService[]>('/api/v1/services').then((items) => {
+      setServices(items);
+      if (items.length) setSelectedServices({ [items[0].id]: { serviceId: items[0].id, durationMinutes: items[0].minimumDurationMinutes, lineAmount: items[0].basePrice } });
+    }).catch((e) => setError(e.message));
+    api<PublicStaff[]>('/api/v1/staff').then(setStaff).catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    const source = events();
+    source.addEventListener('schedule.events', () => setAvailabilityTick((n) => n + 1));
+    return () => source.close();
+  }, [user]);
 
   // Selected Services: default to Massage Thư Giãn (60p) + Chăm Sóc Da Mặt (45p)
-  const [selectedServices, setSelectedServices] = useState<Record<string, SelectedServiceItem>>({
-    'srv-1': {
-      serviceId: 'srv-1',
-      durationMinutes: 60,
-      lineAmount: 450000,
-    },
-    'srv-2': {
-      serviceId: 'srv-2',
-      durationMinutes: 45,
-      lineAmount: 350000,
-    },
-  });
+  const [selectedServices, setSelectedServices] = useState<Record<string, SelectedServiceItem>>({});
 
   // Staff Selection: default to Linh (acc-stf-1)
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('acc-stf-1');
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('none');
 
   // Date & Time Selection
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 8, 14));
-  const [selectedTime, setSelectedTime] = useState<string>('14:00');
+  const [selectedDate, setSelectedDate] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; });
+  const [selectedTime, setSelectedTime] = useState<string>('');
 
   // Time Slots Definition
-  const timeSlots = [
-    { time: '09:00', status: 'available' },
-    { time: '09:30', status: 'booked' },
-    { time: '10:00', status: 'available' },
-    { time: '10:30', status: 'available' },
-    { time: '11:00', status: 'booked' },
-    { time: '11:30', status: 'available' },
-    { time: '13:00', status: 'available' },
-    { time: '13:30', status: 'booked' },
-    { time: '14:00', status: 'available' },
-    { time: '14:30', status: 'available' },
-    { time: '15:00', status: 'available' },
-    { time: '15:30', status: 'booked' },
-    { time: '16:00', status: 'available' },
-    { time: '16:30', status: 'available' },
-    { time: '17:00', status: 'available' },
-  ];
+  const slotTimes = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'];
+  const [timeSlots, setTimeSlots] = useState(slotTimes.map(time => ({ time, status: 'booked' })));
+  const startAt = (time: string) => `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}T${time}:00+07:00`;
+  const lineInputs = () => Object.values(selectedServices).map((item) => {
+    const service = services.find((s) => s.id === item.serviceId)!;
+    return { serviceId: Number(item.serviceId), additionalDurationSteps: service.isDurationAdjustable ? Math.round((item.durationMinutes - service.minimumDurationMinutes) / (service.durationStepMinutes || 30)) : 0 };
+  });
+  useEffect(() => {
+    if (!services.length || !Object.keys(selectedServices).length) { setTimeSlots(slotTimes.map(time => ({ time, status: 'booked' }))); return; }
+    let cancelled = false;
+    const items = lineInputs();
+    Promise.all(slotTimes.map(async (time) => {
+      try {
+        const result = await api<{ staffAccountIds: string[] }>('/api/v1/availability', { method: 'POST', body: json({ bookingStart: startAt(time), items }) });
+        return { time, status: result.staffAccountIds.length && (selectedStaffId === 'none' || result.staffAccountIds.includes(selectedStaffId)) ? 'available' : 'booked' };
+      } catch { return { time, status: 'booked' }; }
+    })).then((slots) => { if (!cancelled) { setTimeSlots(slots); if (selectedTime && !slots.find(s => s.time === selectedTime && s.status === 'available')) setSelectedTime(''); } });
+    return () => { cancelled = true; };
+  }, [services, selectedServices, selectedDate, selectedStaffId, availabilityTick]);
 
   // Toggle or Update Service Selection
   const toggleService = (serviceId: string) => {
-    const srv = MOCK_SERVICES.find((s) => s.id === serviceId);
+    const srv = services.find((s) => s.id === serviceId);
     if (!srv) return;
 
     setSelectedServices((prev) => {
@@ -103,7 +112,7 @@ export const BookingPage: React.FC = () => {
 
   // Adjust Duration for Adjustable Services (+ / - 30 minutes)
   const adjustDuration = (serviceId: string, deltaMinutes: number) => {
-    const srv = MOCK_SERVICES.find((s) => s.id === serviceId);
+    const srv = services.find((s) => s.id === serviceId);
     if (!srv || !srv.isDurationAdjustable) return;
 
     setSelectedServices((prev) => {
@@ -119,7 +128,7 @@ export const BookingPage: React.FC = () => {
         0,
         Math.floor((newDuration - srv.minimumDurationMinutes) / step)
       );
-      const pricePerStep = srv.pricePerDurationStep || 200000;
+      const pricePerStep = srv.pricePerDurationStep ?? 0;
       const newLineAmount = srv.basePrice + additionalSteps * pricePerStep;
 
       return {
@@ -150,13 +159,13 @@ export const BookingPage: React.FC = () => {
 
   const selectedStaff = useMemo(() => {
     if (selectedStaffId === 'none') return 'Tự động phân công (KTV khả dụng)';
-    const found = MOCK_STAFF.find((s) => s.account.id === selectedStaffId);
-    return found ? found.account.displayName : 'Tự động phân công';
-  }, [selectedStaffId]);
+    const found = staff.find((s) => s.accountId === selectedStaffId);
+    return found ? found.displayName : 'Tự động phân công';
+  }, [selectedStaffId, staff]);
 
   // Calculate end time string
   const endTime = useMemo(() => {
-    if (!selectedTime) return '15:00';
+    if (!selectedTime) return '—';
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const endTotalMinutes = hours * 60 + minutes + totalDuration;
     const endH = Math.floor(endTotalMinutes / 60);
@@ -164,30 +173,18 @@ export const BookingPage: React.FC = () => {
     return `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
   }, [selectedTime, totalDuration]);
 
-  const handleConfirmBooking = () => {
-    // Navigate to checkout with booking snapshot data
-    navigate('/checkout', {
-      state: {
-        bookingCode: 'LNR-089',
-        customerName,
-        customerPhone,
-        customerEmail,
-        customerNote,
-        selectedStaff,
-        selectedDate: '14/09/2026',
-        timeRange: `${selectedTime} - ${endTime}`,
-        totalDuration,
-        totalAmount,
-        services: Object.values(selectedServices).map((item) => {
-          const srv = MOCK_SERVICES.find((s) => s.id === item.serviceId);
-          return {
-            name: srv?.name || '',
-            durationMinutes: item.durationMinutes,
-            lineAmount: item.lineAmount,
-          };
-        }),
-      },
-    });
+  const handleConfirmBooking = async () => {
+    if (!selectedTime || !user || !Object.keys(selectedServices).length) return;
+    setError(''); setPending(true);
+    try {
+      const body = json({
+        customerName, customerPhone, customerNote, bookingStart: startAt(selectedTime), staffAccountId: selectedStaffId === 'none' ? null : Number(selectedStaffId), items: lineInputs(),
+      });
+      if (submission.current?.signature !== body) submission.current = { signature: body, key: crypto.randomUUID() };
+      const booking = await api<ApiBooking>('/api/v1/bookings', { method: 'POST', headers: { 'Idempotency-Key': submission.current.key }, body });
+      navigate(`/checkout?booking=${booking.bookingCode}`, { state: booking });
+    } catch (e) { setError(e instanceof Error ? e.message : 'Không thể giữ lịch. Vui lòng chọn khung giờ khác.'); setAvailabilityTick((n) => n + 1); }
+    finally { setPending(false); }
   };
 
   return (
@@ -242,12 +239,7 @@ export const BookingPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <Label>Địa chỉ Email (Nhận vé điện tử)</Label>
-                <Input
-                  type="email"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  placeholder="nguyenvana@example.com"
-                />
+                <Input type="email" value={user?.email || ''} readOnly placeholder="Email Google đã xác minh" />
               </div>
             </div>
 
@@ -266,7 +258,7 @@ export const BookingPage: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                {MOCK_SERVICES.map((service) => {
+                {services.map((service) => {
                   const isSelected = !!selectedServices[service.id];
                   const currentItem = selectedServices[service.id];
 
@@ -328,7 +320,7 @@ export const BookingPage: React.FC = () => {
                           <div className="flex items-center gap-2 bg-white rounded-lg border border-[#D9E5DC] px-2 py-1 shadow-2xs">
                             <button
                               type="button"
-                              onClick={() => adjustDuration(service.id, -30)}
+                              onClick={() => adjustDuration(service.id, -(service.durationStepMinutes || 30))}
                               disabled={currentItem.durationMinutes <= service.minimumDurationMinutes}
                               className="h-6 w-6 rounded flex items-center justify-center text-[#14271C] hover:bg-[#F8F9F5] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                             >
@@ -341,7 +333,7 @@ export const BookingPage: React.FC = () => {
 
                             <button
                               type="button"
-                              onClick={() => adjustDuration(service.id, 30)}
+                              onClick={() => adjustDuration(service.id, service.durationStepMinutes || 30)}
                               className="h-6 w-6 rounded flex items-center justify-center text-[#14271C] hover:bg-[#F8F9F5] cursor-pointer"
                             >
                               <Plus className="h-3 w-3" />
@@ -369,14 +361,14 @@ export const BookingPage: React.FC = () => {
                 onChange={(e) => setSelectedStaffId(e.target.value)}
               >
                 <option value="none">Không yêu cầu (Hệ thống tự phân công chuyên viên phù hợp)</option>
-                {MOCK_STAFF.map((staff) => (
+                {staff.map((staffMember) => (
                   <option
-                    key={staff.account.id}
-                    value={staff.account.id}
-                    disabled={!staff.profile.isBookable}
+                    key={staffMember.accountId}
+                    value={staffMember.accountId}
+                    disabled={!staffMember.isBookable}
                   >
-                    {staff.account.displayName} — {staff.profile.jobTitle}{' '}
-                    {!staff.profile.isBookable ? '(Đã kín lịch ca này)' : ''}
+                    {staffMember.displayName} — {staffMember.jobTitle}{' '}
+                    {!staffMember.isBookable ? '(Không nhận lịch)' : ''}
                   </option>
                 ))}
               </Select>
@@ -405,7 +397,7 @@ export const BookingPage: React.FC = () => {
                   </h3>
                 </div>
                 <span className="text-xs font-semibold text-[#2E7D32] bg-[#E8F5E9] px-2.5 py-1 rounded-full">
-                  14/09/2026
+                  {selectedDate.toLocaleDateString('vi-VN')}
                 </span>
               </div>
 
@@ -470,7 +462,7 @@ export const BookingPage: React.FC = () => {
               {/* Service Line Items */}
               <div className="space-y-2.5 text-xs text-[#D9E5DC]">
                 {Object.values(selectedServices).map((item) => {
-                  const srv = MOCK_SERVICES.find((s) => s.id === item.serviceId);
+                  const srv = services.find((s) => s.id === item.serviceId);
                   return (
                     <div key={item.serviceId} className="flex justify-between items-center">
                       <span className="font-medium text-white">{srv?.name}</span>
@@ -491,7 +483,7 @@ export const BookingPage: React.FC = () => {
 
                 <div className="flex justify-between">
                   <span>Ngày hẹn</span>
-                  <span className="text-white">14/09/2026</span>
+                  <span className="text-white">{selectedDate.toLocaleDateString('vi-VN')}</span>
                 </div>
 
                 <div className="flex justify-between">
@@ -511,11 +503,13 @@ export const BookingPage: React.FC = () => {
                   </span>
                 </div>
 
+                {error && <p className="text-xs text-red-300" role="alert">{error}</p>}
                 <Button
                   onClick={handleConfirmBooking}
+                  disabled={pending || !selectedTime || !Object.keys(selectedServices).length || !user}
                   className="w-full rounded-xl h-13 bg-[#C5A880] text-[#14271C] hover:bg-[#ba9b71] font-bold text-sm tracking-wide shadow-md transition-transform hover:scale-[1.01]"
                 >
-                  Xác nhận đặt lịch
+                  {pending ? 'Đang giữ lịch…' : 'Xác nhận đặt lịch'}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
 
