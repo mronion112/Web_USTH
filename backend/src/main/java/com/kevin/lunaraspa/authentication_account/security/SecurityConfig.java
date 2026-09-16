@@ -27,7 +27,14 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/refresh-token", "/api/auth/logout", "/oauth2/**").permitAll()
+                .requestMatchers(
+                    "/api/auth/refresh-token",
+                    "/api/auth/logout",
+                    "/oauth2/**",
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html"
+                ).permitAll()
                 .requestMatchers("/api/auth/me").authenticated()
                 .anyRequest().access(customAuthorizationManager)
             )

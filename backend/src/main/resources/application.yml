@@ -3,6 +3,14 @@ spring.config.import: optional:file:.env.properties,optional:file:backend/.env.p
 server:
   port: ${BACKEND_PORT}
 
+springdoc:
+  packages-to-scan: com.kevin.lunaraspa
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+
 spring:
   application:
     name: lunara-spa

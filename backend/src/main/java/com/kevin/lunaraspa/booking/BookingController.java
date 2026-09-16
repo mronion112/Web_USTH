@@ -10,6 +10,9 @@ import com.kevin.lunaraspa.booking.dto.CreateBookingRequest;
 import com.kevin.lunaraspa.booking.dto.CreateBookingResponse;
 import com.kevin.lunaraspa.booking.service.BookingService;
 import lombok.RequiredArgsConstructor;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -26,12 +29,15 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "${app.frontend-url}")
+@Tag(name = "Bookings", description = "Tạo và tra cứu booking, phân công nhân viên")
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 public class BookingController {
 
     private final BookingService bookingService;
 
     @PostMapping("/bookings")
+    @Operation(summary = "Tạo booking mới")
     public ResponseEntity<BookingApiResponse<CreateBookingResponse>> createBooking(
             @RequestBody CreateBookingRequest request
     ) {
@@ -44,6 +50,7 @@ public class BookingController {
     }
 
     @GetMapping("/bookings/my")
+    @Operation(summary = "Lấy các booking của người dùng hiện tại")
     public ResponseEntity<BookingApiResponse<List<BookingSummaryResponse>>> getMyBookings() {
         List<BookingSummaryResponse> bookings = bookingService.getMyBookings(
                 SecurityUtils.getCurrentUserEmail()
@@ -54,6 +61,7 @@ public class BookingController {
     }
 
     @GetMapping("/bookings/{bookingCode}")
+    @Operation(summary = "Lấy chi tiết booking theo mã")
     public ResponseEntity<BookingApiResponse<BookingDetailResponse>> getBooking(
             @PathVariable String bookingCode
     ) {
@@ -67,6 +75,7 @@ public class BookingController {
     }
 
     @PatchMapping("/manager/bookings/{bookingId}/assign")
+    @Operation(summary = "Phân công nhân viên cho booking")
     public ResponseEntity<BookingApiResponse<AssignStaffResponse>> assignStaff(
             @PathVariable Long bookingId,
             @RequestBody AssignStaffRequest request

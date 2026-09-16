@@ -44,6 +44,17 @@ Authorization: Bearer <token>
 
 Backend có thể dùng Google OAuth2 để xác thực, sau đó trả JWT cho Frontend.
 
+## Swagger / OpenAPI
+
+Backend đã tích hợp Swagger UI để tự động tổng hợp các API REST được khai báo trong các controller Java.
+Sau khi chạy backend, truy cập:
+
+- Swagger UI: `http://localhost:<BACKEND_PORT>/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:<BACKEND_PORT>/v3/api-docs`
+- OpenAPI YAML: `http://localhost:<BACKEND_PORT>/v3/api-docs.yaml`
+
+Trong Swagger UI, bấm **Authorize** và nhập JWT access token để gọi các API cần đăng nhập. Các URL tài liệu được mở trong `SecurityConfig`; dữ liệu API vẫn giữ cơ chế phân quyền hiện tại.
+
 ## Cấu trúc
 
 ```text
