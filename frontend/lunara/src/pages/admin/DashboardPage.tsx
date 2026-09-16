@@ -29,6 +29,7 @@ import {
   Activity,
   ArrowUpRight
 } from 'lucide-react';
+import { AnimatedNumber } from '@/components/transitions/AnimatedNumber';
 
 export const DashboardPage: React.FC = () => {
   return (
@@ -65,7 +66,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-3xl font-bold text-[#14271C]">
-                {DASHBOARD_METRICS.todayBookings.value}
+                <AnimatedNumber value={DASHBOARD_METRICS.todayBookings.value} />
               </span>
               <span className="inline-flex items-center text-xs font-semibold text-[#2E7D32]">
                 <TrendingUp className="h-3.5 w-3.5 mr-0.5" />
@@ -89,7 +90,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-2xl font-bold text-[#14271C]">
-                {DASHBOARD_METRICS.todayRevenue.value}
+                <AnimatedNumber value={DASHBOARD_METRICS.todayRevenue.value} />
               </span>
               <span className="inline-flex items-center text-xs font-semibold text-[#2E7D32]">
                 <TrendingUp className="h-3.5 w-3.5 mr-0.5" />
@@ -113,9 +114,10 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-3xl font-bold text-[#14271C]">
-                {DASHBOARD_METRICS.customersToday.value}
+                <AnimatedNumber value={DASHBOARD_METRICS.customersToday.value} />
               </span>
               <span className="inline-flex items-center text-xs font-semibold text-[#2E7D32]">
+                <TrendingUp className="h-3.5 w-3.5 mr-0.5" />
                 {DASHBOARD_METRICS.customersToday.change}
               </span>
             </div>
@@ -136,9 +138,10 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-3xl font-bold text-[#14271C]">
-                {DASHBOARD_METRICS.staffUtilization.value}
+                <AnimatedNumber value={DASHBOARD_METRICS.staffUtilization.value} />
               </span>
-              <span className="inline-flex items-center text-xs font-semibold text-[#1E3B2B]">
+              <span className="inline-flex items-center text-xs font-semibold text-[#2E7D32]">
+                <TrendingUp className="h-3.5 w-3.5 mr-0.5" />
                 {DASHBOARD_METRICS.staffUtilization.change}
               </span>
             </div>

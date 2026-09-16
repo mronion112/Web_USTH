@@ -1,10 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Star, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import { IMAGES } from '@/lib/assets';
 
 export const CustomerReview: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const reviews = IMAGES.reviews;
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const handleAvatarHover = (hoverIdx: number) => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!groupRef.current) return;
+    const items = groupRef.current.querySelectorAll<HTMLElement>('.t-avatar');
+    const lift = -8;
+    const scale = 1.08;
+    const falloff = 0.45;
+
+    items.forEach((item, i) => {
+      const distance = Math.abs(i - hoverIdx);
+      const shift = (lift * Math.pow(falloff, distance)).toFixed(3);
+      item.style.setProperty('--shift', `${shift}px`);
+      item.style.setProperty('--scale-active', i === hoverIdx ? String(scale) : '1');
+    });
+  };
+
+  const handleAvatarLeave = () => {
+    if (!groupRef.current) return;
+    const items = groupRef.current.querySelectorAll<HTMLElement>('.t-avatar');
+    items.forEach((item) => {
+      item.style.setProperty('--shift', '0px');
+      item.style.setProperty('--scale-active', '1');
+    });
+  };
 
   const handlePrev = () => {
     setActiveIndex((prev) => (prev === 0 ? reviews.length - 1 : prev - 1));
@@ -44,16 +70,21 @@ export const CustomerReview: React.FC = () => {
           </div>
         </div>
 
-        {/* Story Circle Avatars */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-6 pb-12">
+        {/* Story Circle Avatars with Spring Lift */}
+        <div
+          ref={groupRef}
+          onMouseLeave={handleAvatarLeave}
+          className="grid grid-cols-2 sm:grid-cols-5 gap-6 pb-12"
+        >
           {reviews.map((rev, idx) => {
             const isSelected = activeIndex === idx;
             return (
               <div
                 key={idx}
                 onClick={() => setActiveIndex(idx)}
-                className={`flex flex-col items-center text-center cursor-pointer transition-all duration-300 ${
-                  isSelected ? 'opacity-100 scale-105' : 'opacity-60 hover:opacity-90'
+                onMouseEnter={() => handleAvatarHover(idx)}
+                className={`t-avatar flex flex-col items-center text-center cursor-pointer transition-opacity duration-300 ${
+                  isSelected ? 'opacity-100' : 'opacity-60 hover:opacity-90'
                 }`}
               >
                 {/* Avatar with Play Ring */}

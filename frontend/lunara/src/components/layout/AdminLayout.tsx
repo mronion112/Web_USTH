@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, Navigate, useLocation } from 'react-router-dom';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminTopBar } from './AdminTopBar';
 import { Menu, X } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const AdminLayout: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <div className="p-8">Đang xác thực…</div>;
+  if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  if (location.pathname.startsWith('/staff') && user.roleCode !== 'THERAPIST') return <Navigate to="/admin/dashboard" replace />;
+  if (location.pathname.startsWith('/admin') && user.roleCode === 'CUSTOMER') return <Navigate to="/booking" replace />;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F8F9F5] font-body">
