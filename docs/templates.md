@@ -17,9 +17,12 @@ cp templates/.env.example templates/.env
 
 Chi tiết:
 
-- Backend Spring Boot chịu trách nhiệm seeding và override. Placeholder cho 2 điểm chưa chốt:
-  - Factory: TBD, ví dụ `Instancio`/`EasyRandom`/`Builder` tự viết + `Testcontainers`.
-  - Vị trí ground truth: TBD, ví dụ `backend/src/test/fixtures/` hoặc `backend/src/main/resources/seed/`.
+- Backend Spring Boot chịu trách nhiệm seeding và override.
+- Thư viện fixture chốt: `org.instancio:instancio-junit` bản 6.0.0.
+- Khung mẫu ở `templates/test-fixtures/`: `EntityFixtures` cho entity/DTO,
+  `DbFixtures` cho repository test, `ControllerFixtures` cho controller test.
+  Copy vào `backend/src/test/java/<package-goc>/fixtures/` rồi rename package.
+- Vị trí ground truth: TBD, ví dụ `backend/src/test/fixtures/` hoặc `backend/src/main/resources/seed/`.
 - Mock frontend ở `frontend/lunara/src/data/` chỉ phục vụ UI, không seed DB.
 - Hạ tầng không nhận file `database/*.sql` chứa `INSERT` hay CSV seed.
 
