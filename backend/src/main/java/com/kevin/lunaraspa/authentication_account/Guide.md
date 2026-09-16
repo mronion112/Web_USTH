@@ -42,28 +42,12 @@ GET
 
 Không cần Body.
 
-**Response JSON**
+**Response**
 
-```json
-{
-  "success": true,
-  "message": "Login successfully",
-  "data": {
-    "accessToken": "jwt-token",
-    "tokenType": "Bearer",
-    "user": {
-      "id": 10,
-      "email": "user@gmail.com",
-      "displayName": "Nguyen Van A",
-      "avatarUrl": "https://example.com/avatar.jpg",
-      "role": "CUSTOMER"
-    }
-  },
-  "timestamp": "2026-09-20T10:00:00"
-}
-```
+Backend không trả về JSON tĩnh, mà sẽ thực hiện lệnh HTTP Redirect 302 chuyển hướng trình duyệt về lại Frontend SPA (React/Vue).
+Token được đính kèm vào URL (ví dụ: `http://localhost:3000/oauth2/redirect?token=...&refreshToken=...`).
 
-**Quy tắc chính:** `google_subject` dùng để liên kết tài khoản Google với `accounts`.
+**Quy tắc chính:** Frontend lắng nghe route `/oauth2/redirect`, lấy token trên URL và lưu vào LocalStorage/Cookie. `google_subject` dùng để liên kết tài khoản Google với `accounts`.
 
 ---
 

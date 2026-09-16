@@ -1,0 +1,13 @@
+package com.kevin.lunaraspa.authentication_account.service;
+
+import com.kevin.lunaraspa.authentication_account.dto.AccountResponseDTO;
+
+import java.util.Map;
+
+public interface AuthService {
+    AccountResponseDTO getMe();
+    java.util.List<AccountResponseDTO> getAllAccounts();
+    Map<String, String> refreshToken(Map<String, String> request);
+    void logout(String authHeader, Map<String, String> request);
+    Map<String, String> exchangeToken(Map<String, String> request);
+}
