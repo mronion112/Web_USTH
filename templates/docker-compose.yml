@@ -12,7 +12,8 @@
 #   docker compose -f templates/docker-compose.yml up
 #
 # Mặc định chỉ khởi động DB template và Redis, chưa có data.
-# Khi backend đã có pom.xml, chạy full stack:
+# VITE_API_URL chốt lúc build frontend, đổi giá trị thì build lại.
+# Chạy full stack:
 #   docker compose -f templates/docker-compose.yml --profile app up --build
 
 name: lunara-spa
@@ -56,6 +57,12 @@ services:
       dockerfile: templates/Dockerfile.backend
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     env_file: .env
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://db:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
@@ -75,13 +82,15 @@ services:
   frontend:
     profiles: ["app"]
     build:
-      context: ../frontend/app
+      context: ..
+      dockerfile: templates/Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      - "${FRONTEND_PORT:-5173}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

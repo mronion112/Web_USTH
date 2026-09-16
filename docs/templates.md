@@ -34,7 +34,7 @@ Chi tiết:
 - `db`: MySQL 8.4, seed từ template, healthcheck trước khi app khởi động.
 - `redis`: Redis 7, phụ thuộc chính thức của backend.
 - `backend`: build từ `templates/Dockerfile.backend` chung với context root repo, yêu cầu module có `pom.xml` + `mvnw`.
-- `frontend`: placeholder tới khi có `Dockerfile` riêng.
+- `frontend`: build từ `templates/Dockerfile.frontend` (Node build, nginx serve), context `frontend/lunara`. `VITE_API_URL` chốt lúc build, đổi thì build lại.
 
 ## Workflow local
 
