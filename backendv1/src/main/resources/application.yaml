@@ -1,0 +1,46 @@
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3307/lunara?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USER:lunara}
+    password: ${DB_PASSWORD:lunara_local}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: lunara-api
+      auto-offset-reset: earliest
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:local-placeholder}
+            client-secret: ${GOOGLE_CLIENT_SECRET:local-placeholder}
+            scope: openid,email,profile
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  owner-email: ${OWNER_EMAIL:owner@example.com}
+  mail-from: ${MAIL_FROM:booking@lunara.local}
+  mail-enabled: ${MAIL_ENABLED:true}
+  jwt-secret: ${JWT_SECRET:local-only-secret-must-be-replaced-at-least-32-bytes}
+  cookie-secure: ${COOKIE_SECURE:false}
+  sepay:
+    bank: ${SEPAY_BANK:VCB}
+    account: ${SEPAY_ACCOUNT:0000000000}
+    hmac-secret: ${SEPAY_HMAC_SECRET:local-sepay-secret}

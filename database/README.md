@@ -1,115 +1,64 @@
-# Rosa Spa Mock Database
+# Lunara Spa Mock Database
 
-Bộ dữ liệu mock được tạo theo schema MariaDB/MySQL của Rosa Spa.
+Bộ mock data này bám theo schema `lunara_spa` gồm đúng 15 table:
+
+1. roles
+2. permissions
+3. role_permissions
+4. accounts
+5. customer_profiles
+6. staff_profiles
+7. services
+8. staff_services
+9. staff_working_hours
+10. staff_time_off
+11. bookings
+12. booking_items
+13. booking_events
+14. payments
+15. feedback
 
 ## Folder
 
-```text
-Rosa_Spa_Mock_Database/
-├── production/
-│   ├── roles.csv
-│   ├── users.csv
-│   ├── ...
-│   └── site_content.csv
-├── testing/
-│   ├── roles.csv
-│   ├── users.csv
-│   ├── ...
-│   └── site_content.csv
-├── IMPORT_ORDER.txt
-└── README.md
-```
+- `Production/`: dữ liệu lớn hơn để demo, benchmark API và kiểm thử luồng gần production.
+- `Testing/`: dữ liệu nhỏ hơn, đủ case chính để dev/test nhanh.
 
-- `production/`: bộ mock lớn hơn để demo, benchmark API, dashboard, filter và pagination.
-- `testing/`: bộ nhỏ hơn để test CRUD và business logic.
+## Snapshot logic
 
-## Các trường hợp dữ liệu đã cover
+Mock data được thiết kế như trạng thái hệ thống tại:
 
-- 3 role: `USER`, `STAFF`, `MANAGER`.
-- Account đăng nhập password thường.
-- Account OAuth-only (`password_hash = NULL`).
-- Account liên kết Google / Facebook.
-- Customer có field profile đầy đủ và một số field nullable.
-- Staff `is_available = TRUE/FALSE`.
-- Package active và inactive.
-- Staff có nhiều kỹ năng / package.
-- Lịch làm việc weekday / Saturday / Sunday off.
-- Time-off cả ngày và nửa ngày.
-- Đủ 6 Booking status: `PENDING`, `CONFIRMED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `REJECTED`.
-- Đủ 3 assignment type: `AUTO`, `MANUAL`, `CUSTOMER`.
-- Booking chưa được phân Staff (`staff_id = NULL`).
-- Booking status history nhiều bước.
-- Đủ Task status: `ASSIGNED`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `REJECTED`.
-- Feedback từ 1 đến 5 sao/mức đánh giá.
-- Attendance hoàn chỉnh, đang trong ca (`check_out = NULL`) và một edge case sửa tay trong bộ testing.
-- Nội dung `site_content`.
+`2026-09-15 15:00:00`
 
-## Kích thước dữ liệu
-
-| Table | Production | Testing |
-| --- | ---: | ---: |
-| `roles` | 3 | 3 |
-| `users` | 115 | 15 |
-| `oauth_providers` | 2 | 2 |
-| `oauth_accounts` | 21 | 4 |
-| `customer_profiles` | 100 | 10 |
-| `staff_profiles` | 12 | 4 |
-| `manager_profiles` | 3 | 1 |
-| `spa_packages` | 10 | 7 |
-| `staff_package_skills` | 66 | 20 |
-| `staff_working_hours` | 84 | 28 |
-| `staff_time_off` | 18 | 4 |
-| `booking_statuses` | 6 | 6 |
-| `bookings` | 220 | 24 |
-| `booking_status_history` | 680 | 61 |
-| `task_statuses` | 5 | 5 |
-| `staff_tasks` | 200 | 20 |
-| `feedback_ratings` | 5 | 5 |
-| `feedback` | 76 | 5 |
-| `attendance` | 249 | 28 |
-| `site_content` | 4 | 4 |
+Vì vậy:
+- `COMPLETED` nằm trong quá khứ.
+- `PENDING_PAYMENT`, `PENDING`, `CONFIRMED` chủ yếu là lịch tương lai.
+- `CHECKED_IN` và `IN_SERVICE` dùng các booking trong ngày snapshot.
+- Feedback chỉ xuất hiện với booking `COMPLETED`.
+- Payment `PAID` có `paid_at`.
+- Payment `REFUNDED` có cả `paid_at` và `refunded_at`.
+- Payment `UNPAID` / `FAILED` không có `paid_at`.
+- QR payment có `qr_payload`, CARD / AT_SPA để NULL.
+- `payments.amount = bookings.total_amount`.
+- `bookings.total_amount = SUM(booking_items.line_amount)`.
+- `bookings.total_duration_minutes = SUM(booking_items.duration_minutes)`.
+- Staff được gán booking phải có skill trong `staff_services`.
+- Mock generator tránh booking bị overlap trên cùng một Staff.
+- Booking được đặt trong Working Hours và tránh các ngày `staff_time_off`.
 
 ## NULL trong CSV
 
-Các giá trị SQL `NULL` được ghi dưới dạng:
+Giá trị SQL NULL được ghi là:
 
 ```text
 \N
 ```
 
-Đây là marker chuẩn khi dùng MariaDB/MySQL `LOAD DATA`.
+Khi import bằng DBeaver/MySQL hãy cấu hình NULL marker là `\N`.
 
-Nếu import bằng DBeaver, hãy cấu hình `\N` là NULL value marker nếu DBeaver chưa tự nhận.
+## Import order
 
-## Mock password
-
-Các account password thường đang dùng cùng một chuỗi BCrypt mock:
-
-```text
-$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
-```
-
-Dữ liệu này chỉ dùng để mock database, không dùng cho production thật.
-
-## Seed data trong SQL hiện tại
-
-SQL của bạn đã tự INSERT các bảng lookup:
-
-- `roles`
-- `oauth_providers`
-- `booking_statuses`
-- `task_statuses`
-- `feedback_ratings`
-
-Nếu bạn chạy nguyên seed SQL trước rồi import toàn bộ CSV, các bảng trên có thể bị duplicate key.
-
-Có 2 cách:
-
-1. Comment các `INSERT INTO` seed trong schema rồi import toàn bộ CSV theo `IMPORT_ORDER.txt`.
-2. Giữ seed hiện tại và bỏ qua 5 CSV lookup nói trên khi import.
-
-Tương tự với `site_content`: nếu giữ block default INSERT của SQL thì không import `site_content.csv` lần nữa.
+Import theo thứ tự trong `IMPORT_ORDER.txt` để không lỗi Foreign Key.
 
 ## Encoding
 
-CSV dùng `UTF-8 with BOM` để giữ tiếng Việt ổn định khi mở bằng Excel/DBeaver.
+CSV dùng UTF-8 để giữ đúng tiếng Việt.

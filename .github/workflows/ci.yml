@@ -1,0 +1,243 @@
+# Chạy trên mọi push và pull request. Job db-validate luôn chạy.
+# Job build-test tự kích hoạt khi code ứng dụng xuất hiện
+# tại backend (Spring Boot) hoặc frontend/lunara (React).
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  db-validate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chờ MySQL sẵn sàng
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h127.0.0.1 --silent; then
+              echo "MySQL đã sẵn sàng."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL không sẵn sàng sau 60 giây." >&2
+          exit 1
+
+      - name: Nạp schema
+        env:
+          MYSQL_PWD: test-root
+        run: mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
+
+      - name: Kiểm tra bảng theo kỳ vọng
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          mapfile -t EXPECTED < database/expected_tables.txt
+          ACTUAL=$(mysql -h127.0.0.1 -uroot -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='lunara_spa';")
+          MISSING=0
+          for table in "${EXPECTED[@]}"; do
+            if ! grep -qx "$table" <<< "$ACTUAL"; then
+              echo "Thiếu bảng: $table"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Database OK: đủ ${#EXPECTED[@]} bảng theo kỳ vọng."
+
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chờ MySQL sẵn sàng
+        if: hashFiles('backend/pom.xml') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h127.0.0.1 --silent; then
+              echo "MySQL đã sẵn sàng."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL không sẵn sàng sau 60 giây." >&2
+          exit 1
+
+      - name: Nạp schema cho test
+        if: hashFiles('backend/pom.xml') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
+
+      - name: Cài Java
+        if: hashFiles('backend/pom.xml') != ''
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Test backend
+        if: hashFiles('backend/pom.xml') != ''
+        env:
+          BACKEND_PORT: 8080
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: test-root
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          JWT_SECRET: test-secret-0123456789abcdef-0123456789abcdef
+          JWT_EXPIRATION_MS: 86400000
+          GOOGLE_CLIENT_ID: test-client-id
+          GOOGLE_CLIENT_SECRET: test-client-secret
+          FRONTEND_URL: http://localhost:5173
+        run: mvn -B -f backend/pom.xml test
+
+      - name: Cài Node
+        if: hashFiles('frontend/lunara/package.json') != ''
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/lunara/package-lock.json
+
+      - name: Build frontend
+        if: hashFiles('frontend/lunara/package.json') != ''
+        run: |
+          cd frontend/lunara
+          npm ci
+          npm run build
+
+      - name: Báo cáo bỏ qua build
+        if: hashFiles('backend/pom.xml') == '' && hashFiles('frontend/lunara/package.json') == ''
+        run: echo "Chưa có code ứng dụng, chỉ chạy db-validate."
+
+  data-import-check:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chờ MySQL sẵn sàng
+        if: hashFiles('database/Testing/*.csv') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h127.0.0.1 --silent; then
+              echo "MySQL đã sẵn sàng."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL không sẵn sàng sau 60 giây." >&2
+          exit 1
+
+      - name: Nạp mock dataset Testing
+        if: hashFiles('database/Testing/*.csv') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
+          mysql -h127.0.0.1 -uroot -e "SET GLOBAL local_infile=1; SET FOREIGN_KEY_CHECKS=0;"
+          for f in $(sed 's/^[0-9]*\. //;s/\.csv$//' database/IMPORT_ORDER.txt); do
+            mysql --local-infile=1 -h127.0.0.1 -uroot lunara_spa -e \
+              "LOAD DATA LOCAL INFILE 'database/Testing/$f.csv' INTO TABLE $f \
+              FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\r\n' \
+              IGNORE 1 LINES;"
+          done
+          mysql -h127.0.0.1 -uroot -e "SET FOREIGN_KEY_CHECKS=1;"
+
+      - name: Kiểm tra row đã nạp
+        if: hashFiles('database/Testing/*.csv') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          COUNT=$(mysql -h127.0.0.1 -uroot -N -e "SELECT COUNT(*) FROM lunara_spa.bookings;")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "Mock dataset OK: bookings có $COUNT rows."
+          else
+            echo "Mock dataset rỗng." >&2
+            exit 1
+          fi
+
+      - name: Báo cáo bỏ qua kiểm import
+        if: hashFiles('database/Testing/*.csv') == ''
+        run: echo "Chưa có mock dataset, đã bỏ qua."
+
+  infra-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Rà soát thay đổi hạ tầng
+        run: |
+          PATHS="Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore"
+          BASE="${{ github.base_ref }}"
+          if [ -z "$BASE" ]; then
+            echo "Không phải pull request, đã bỏ qua."
+            exit 0
+          fi
+          git fetch -q origin "$BASE" 2>/dev/null || true
+          DELETED=$(git diff --name-status "origin/$BASE"...HEAD -- $PATHS | grep '^D' || true)
+          if [ -n "$DELETED" ]; then
+            echo "$DELETED"
+            echo "Có file hạ tầng bị xóa, cần khôi phục trước khi merge." >&2
+            exit 1
+          fi
+          git diff --name-status "origin/$BASE"...HEAD -- $PATHS
+          echo "Xong. Sửa file hạ tầng cần reviewer xác nhận."

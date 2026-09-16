@@ -1,0 +1,340 @@
+Project lunara_spa_v2 {
+  database_type: 'MySQL'
+  Note: 'Schema derived only from frontend wireframes and FLOW.md. Google-only authentication; no booking cancellation.'
+}
+
+Enum booking_status {
+  PENDING_PAYMENT
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  IN_SERVICE
+  COMPLETED
+}
+
+Enum payment_status {
+  UNPAID
+  PAID
+  FAILED
+  REFUNDED
+}
+
+Enum payment_method {
+  QR
+  CARD
+  AT_SPA
+}
+
+Enum assignment_source {
+  SYSTEM
+  CUSTOMER
+  ADMIN
+}
+
+TableGroup identity_and_access {
+  roles
+  permissions
+  role_permissions
+  accounts
+  customer_profiles
+  staff_profiles
+}
+
+TableGroup catalog_and_schedule {
+  services
+  staff_services
+  staff_working_hours
+  staff_time_off
+}
+
+TableGroup booking_and_payment {
+  bookings
+  booking_items
+  booking_events
+  payments
+  feedback
+}
+
+Table roles {
+  id tinyint [pk, increment]
+  code varchar(30) [not null, unique, note: 'OWNER / MANAGER / RECEPTIONIST / THERAPIST / ACCOUNTANT / CUSTOMER']
+  name varchar(100) [not null]
+  description varchar(255)
+}
+
+Table permissions {
+  id smallint [pk, increment]
+  code varchar(100) [not null, unique]
+  module varchar(50) [not null, note: 'BOOKINGS / CUSTOMERS / PAYMENTS / REPORTS / ADMINISTRATION']
+  description varchar(255)
+
+  indexes {
+    module
+  }
+}
+
+Table role_permissions {
+  role_id tinyint [not null]
+  permission_id smallint [not null]
+
+  indexes {
+    (role_id, permission_id) [pk]
+    permission_id
+  }
+}
+
+Table accounts {
+  id bigint [pk, increment]
+  role_id tinyint [not null]
+  google_subject varchar(255) [unique, note: 'Google sub; null until a pre-provisioned account signs in']
+  email varchar(255) [not null, unique]
+  display_name varchar(150) [not null]
+  avatar_url varchar(500)
+  is_active boolean [not null, default: true]
+  provisioned_by_account_id bigint
+  last_login_at datetime
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    role_id
+    is_active
+  }
+}
+
+Table customer_profiles {
+  account_id bigint [pk]
+  phone varchar(30)
+  preferences text
+  internal_notes text
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    phone
+  }
+}
+
+Table staff_profiles {
+  account_id bigint [pk]
+  employee_code varchar(50) [not null, unique]
+  job_title varchar(100) [not null, note: 'For example Senior Therapist / Therapist / Specialist']
+  is_bookable boolean [not null, default: true]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    is_bookable
+  }
+}
+
+Table services {
+  id bigint [pk, increment]
+  name varchar(150) [not null, unique]
+  category varchar(100) [not null]
+  description text
+  image_url varchar(500)
+  base_price decimal(12,2) [not null, note: 'Price at minimum duration']
+  minimum_duration_minutes int [not null]
+  is_duration_adjustable boolean [not null, default: false]
+  duration_step_minutes int [note: '30 for adjustable service; null for fixed duration']
+  price_per_duration_step decimal(12,2) [note: 'Null for fixed duration']
+  preparation_buffer_minutes int [not null, default: 0]
+  cleanup_buffer_minutes int [not null, default: 0]
+  display_order int [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (category, is_active, display_order)
+  }
+
+  checks {
+    `base_price >= 0` [name: 'chk_services_base_price']
+    `minimum_duration_minutes > 0` [name: 'chk_services_minimum_duration']
+    `preparation_buffer_minutes >= 0 AND cleanup_buffer_minutes >= 0` [name: 'chk_services_buffers']
+    `(is_duration_adjustable = false AND duration_step_minutes IS NULL AND price_per_duration_step IS NULL) OR (is_duration_adjustable = true AND duration_step_minutes > 0 AND price_per_duration_step >= 0)` [name: 'chk_services_duration_pricing']
+  }
+}
+
+Table staff_services {
+  staff_account_id bigint [not null]
+  service_id bigint [not null]
+
+  indexes {
+    (staff_account_id, service_id) [pk]
+    service_id
+  }
+}
+
+Table staff_working_hours {
+  id bigint [pk, increment]
+  staff_account_id bigint [not null]
+  day_of_week tinyint [not null, note: '1 = Monday ... 7 = Sunday']
+  start_time time [not null]
+  end_time time [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (staff_account_id, day_of_week, start_time) [unique]
+    (staff_account_id, day_of_week, is_active)
+  }
+
+  checks {
+    `day_of_week BETWEEN 1 AND 7` [name: 'chk_working_hours_day']
+    `start_time < end_time` [name: 'chk_working_hours_range']
+  }
+}
+
+Table staff_time_off {
+  id bigint [pk, increment]
+  staff_account_id bigint [not null]
+  start_at datetime [not null]
+  end_at datetime [not null]
+  reason varchar(500)
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (staff_account_id, start_at, end_at)
+  }
+
+  checks {
+    `start_at < end_at` [name: 'chk_staff_time_off_range']
+  }
+}
+
+Table bookings {
+  id bigint [pk, increment]
+  booking_code varchar(32) [not null, unique, note: 'Used by ticket, admin search, email, and Calendar link']
+  customer_account_id bigint [not null]
+  staff_account_id bigint
+  status booking_status [not null, default: 'PENDING_PAYMENT']
+  assignment_source assignment_source [not null, default: 'SYSTEM']
+  customer_name_snapshot varchar(150) [not null]
+  customer_email_snapshot varchar(255) [not null]
+  customer_phone_snapshot varchar(30)
+  booking_start datetime [not null]
+  booking_end datetime [not null]
+  customer_note text
+  total_duration_minutes int [not null]
+  total_amount decimal(12,2) [not null]
+  checked_in_at datetime
+  service_started_at datetime
+  completed_at datetime
+  created_by_account_id bigint [not null, note: 'Customer self-booking or Admin/Receptionist creating a booking']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (customer_account_id, booking_start)
+    (staff_account_id, booking_start, booking_end)
+    (status, booking_start)
+  }
+
+  checks {
+    `booking_start < booking_end` [name: 'chk_bookings_time_range']
+    `total_duration_minutes > 0` [name: 'chk_bookings_total_duration']
+    `total_amount >= 0` [name: 'chk_bookings_total_amount']
+  }
+}
+
+Table booking_items {
+  id bigint [pk, increment]
+  booking_id bigint [not null]
+  service_id bigint [not null]
+  service_name_snapshot varchar(150) [not null]
+  duration_minutes int [not null]
+  base_price_snapshot decimal(12,2) [not null]
+  additional_duration_steps int [not null, default: 0]
+  price_per_step_snapshot decimal(12,2) [not null, default: 0]
+  line_amount decimal(12,2) [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (booking_id, service_id) [unique]
+    service_id
+  }
+
+  checks {
+    `duration_minutes > 0` [name: 'chk_booking_items_duration']
+    `base_price_snapshot >= 0 AND price_per_step_snapshot >= 0` [name: 'chk_booking_items_prices']
+    `additional_duration_steps >= 0` [name: 'chk_booking_items_steps']
+    `line_amount >= 0` [name: 'chk_booking_items_line_amount']
+  }
+}
+
+Table booking_events {
+  id bigint [pk, increment]
+  booking_id bigint [not null]
+  event_type varchar(50) [not null, note: 'CREATED / PAYMENT_RECEIVED / EMAIL_SENT / RESCHEDULED / CHECKED_IN / SERVICE_STARTED / COMPLETED / STAFF_ASSIGNED']
+  actor_account_id bigint
+  message varchar(500) [not null]
+  occurred_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (booking_id, occurred_at)
+  }
+}
+
+Table payments {
+  id bigint [pk, increment]
+  transaction_code varchar(32) [not null, unique]
+  booking_id bigint [not null, unique]
+  status payment_status [not null, default: 'UNPAID']
+  method payment_method [not null]
+  amount decimal(12,2) [not null]
+  qr_payload text
+  paid_at datetime
+  refunded_at datetime
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (status, method, created_at)
+  }
+
+  checks {
+    `amount >= 0` [name: 'chk_payments_amount']
+  }
+}
+
+Table feedback {
+  id bigint [pk, increment]
+  booking_id bigint [not null, unique]
+  rating tinyint [not null, note: '1 to 5 stars']
+  comment text
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    rating
+  }
+
+  checks {
+    `rating BETWEEN 1 AND 5` [name: 'chk_feedback_rating']
+  }
+}
+
+Ref fk_role_permissions_role: role_permissions.role_id > roles.id [delete: cascade, update: cascade]
+Ref fk_role_permissions_permission: role_permissions.permission_id > permissions.id [delete: cascade, update: cascade]
+Ref fk_accounts_role: accounts.role_id > roles.id [delete: restrict, update: cascade]
+Ref fk_accounts_provisioned_by: accounts.provisioned_by_account_id > accounts.id [delete: set null, update: cascade]
+Ref fk_customer_profiles_account: accounts.id - customer_profiles.account_id [delete: cascade, update: cascade]
+Ref fk_staff_profiles_account: accounts.id - staff_profiles.account_id [delete: cascade, update: cascade]
+Ref fk_staff_services_staff: staff_services.staff_account_id > staff_profiles.account_id [delete: cascade, update: cascade]
+Ref fk_staff_services_service: staff_services.service_id > services.id [delete: cascade, update: cascade]
+Ref fk_working_hours_staff: staff_working_hours.staff_account_id > staff_profiles.account_id [delete: cascade, update: cascade]
+Ref fk_time_off_staff: staff_time_off.staff_account_id > staff_profiles.account_id [delete: cascade, update: cascade]
+Ref fk_bookings_customer: bookings.customer_account_id > customer_profiles.account_id [delete: restrict, update: cascade]
+Ref fk_bookings_staff: bookings.staff_account_id > staff_profiles.account_id [delete: set null, update: cascade]
+Ref fk_bookings_created_by: bookings.created_by_account_id > accounts.id [delete: restrict, update: cascade]
+Ref fk_booking_items_booking: booking_items.booking_id > bookings.id [delete: cascade, update: cascade]
+Ref fk_booking_items_service: booking_items.service_id > services.id [delete: restrict, update: cascade]
+Ref fk_booking_events_booking: booking_events.booking_id > bookings.id [delete: cascade, update: cascade]
+Ref fk_booking_events_actor: booking_events.actor_account_id > accounts.id [delete: set null, update: cascade]
+Ref fk_payments_booking: bookings.id - payments.booking_id [delete: restrict, update: cascade]
+Ref fk_feedback_booking: bookings.id - feedback.booking_id [delete: cascade, update: cascade]
+

@@ -1,0 +1,7 @@
+id,code,name,description
+1,OWNER,Owner,Chủ hệ thống Lunara Spa
+2,MANAGER,Manager,Quản lý vận hành Spa
+3,RECEPTIONIST,Receptionist,Lễ tân tiếp nhận và quản lý lịch hẹn
+4,THERAPIST,Therapist,Kỹ thuật viên thực hiện dịch vụ
+5,ACCOUNTANT,Accountant,Nhân sự phụ trách thanh toán và báo cáo
+6,CUSTOMER,Customer,Khách hàng sử dụng dịch vụ

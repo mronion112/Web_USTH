@@ -1,0 +1,2 @@
+CREATE TABLE audit_log (id BIGINT PRIMARY KEY AUTO_INCREMENT, actor_account_id BIGINT, action VARCHAR(100) NOT NULL, target_type VARCHAR(50) NOT NULL, target_id VARCHAR(100) NOT NULL, details TEXT, occurred_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), FOREIGN KEY(actor_account_id) REFERENCES accounts(id), INDEX idx_audit_target(target_type,target_id,occurred_at));
+CREATE TABLE email_deliveries (outbox_id BIGINT PRIMARY KEY, delivered_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), FOREIGN KEY(outbox_id) REFERENCES outbox_events(id));

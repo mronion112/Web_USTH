@@ -1,0 +1,7 @@
+target
+.git
+.env
+client_secret*.json
+*google*credentials*.json
+*.iml
+.idea

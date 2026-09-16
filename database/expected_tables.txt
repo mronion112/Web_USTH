@@ -1,0 +1,15 @@
+roles
+permissions
+role_permissions
+accounts
+customer_profiles
+staff_profiles
+services
+staff_services
+staff_working_hours
+staff_time_off
+bookings
+booking_items
+booking_events
+payments
+feedback

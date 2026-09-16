@@ -1,0 +1,97 @@
+# Stack local: MySQL + Redis + Spring Boot backend + React frontend.
+#
+# Quy tắc DB: database/Web_DataBase_USTH.sql là template cố định chỉ DDL,
+# một DB lunara_spa duy nhất cho mọi service. Data do code nạp qua
+# factory/fixture, không seed sẵn trong compose. ddl-auto: validate.
+# Mock dataset CSV (database/Production, database/Testing) nạp thủ công
+# từ host bằng make seed-demo / seed-test, không mount vào entrypoint
+# để tránh nạp nhầm Production mỗi lần khởi động.
+#
+# Chạy từ thư mục gốc:
+#   cp templates/.env.example templates/.env
+#   docker compose -f templates/docker-compose.yml up
+#
+# Mặc định chỉ khởi động DB template và Redis, chưa có data.
+# VITE_API_URL chốt lúc build frontend, đổi giá trị thì build lại.
+# Chạy full stack:
+#   docker compose -f templates/docker-compose.yml --profile app up --build
+
+name: lunara-spa
+
+services:
+  db:
+    image: mysql:8.4
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?thiếu trong .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-lunara_spa}
+      MYSQL_USER: ${MYSQL_USER:-lunara}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?thiếu trong .env}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ../database/Web_DataBase_USTH.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: templates/Dockerfile.backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://db:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-lunara}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?thiếu trong .env}
+      JWT_SECRET: ${JWT_SECRET:?thiếu trong .env}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: templates/Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:
