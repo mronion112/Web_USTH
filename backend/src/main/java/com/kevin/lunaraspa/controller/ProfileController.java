@@ -1,9 +1,9 @@
 package com.kevin.lunaraspa.controller;
 
 import com.kevin.lunaraspa.core.http.ResponseBuilder;
-import com.kevin.lunaraspa.dto.profile.ProfileUpdateRequest;
-import com.kevin.lunaraspa.security.SecurityUtils;
-import com.kevin.lunaraspa.service.ProfileService;
+import com.kevin.lunaraspa.profiles.dto.ProfileUpdateRequest;
+import com.kevin.lunaraspa.authentication_account.security.SecurityUtils;
+import com.kevin.lunaraspa.profiles.service.ProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

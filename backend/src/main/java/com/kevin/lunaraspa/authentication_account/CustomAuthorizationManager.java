@@ -1,5 +1,5 @@
 package com.kevin.lunaraspa.authentication_account;
-import com.kevin.lunaraspa.security.CustomUserDetails;
+import com.kevin.lunaraspa.authentication_account.security.CustomUserDetails;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

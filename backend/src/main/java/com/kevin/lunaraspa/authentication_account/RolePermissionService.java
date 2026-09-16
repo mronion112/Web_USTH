@@ -1,7 +1,7 @@
 package com.kevin.lunaraspa.authentication_account;
 
-import com.kevin.lunaraspa.entity.Permission;
-import com.kevin.lunaraspa.repository.RoleRepository;
+import com.kevin.lunaraspa.authentication_account.entity.Permission;
+import com.kevin.lunaraspa.authentication_account.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
