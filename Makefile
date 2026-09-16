@@ -17,13 +17,14 @@ REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_
 INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
 BASELINE ?= origin/main
 
-.PHONY: help check-env up up-app down logs seed schema seed-dataset seed-demo seed-test validate test-backend verify-infra
+.PHONY: help check-env up up-app down down-all logs seed schema seed-dataset seed-demo seed-test validate test-backend verify-infra
 
 help:
 	@echo "Targets:"
 	@echo "  up           Khởi động stack local (DB template + Redis, chưa có data)"
 	@echo "  up-app       Khởi động full stack (database, redis, backend, frontend)"
-	@echo "  down         Dừng stack local"
+	@echo "  down         Dừng stack local (giữ data trong volume)"
+	@echo "  down-all     Dừng stack và xóa volume (mất data, up lại seed từ template)"
 	@echo "  logs         Xem log, ví dụ: make logs SERVICE=db"
 	@echo "  seed         Nạp lại schema template database/Web_DataBase_USTH.sql (không kèm data)"
 	@echo "  schema       Alias của seed"
@@ -49,6 +50,9 @@ up-app: check-env
 
 down:
 	$(COMPOSE) down
+
+down-all:
+	$(COMPOSE) down -v
 
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
