@@ -10,27 +10,44 @@ cp templates/.env.example templates/.env
 ## Quy tắc DB
 
 - `database/Web_DataBase_USTH.sql` là template cố định, chỉ chứa DDL, không chứa data.
-- Data mock được nạp từ code, không nằm sẵn trong DB.
-- Khi kiểm thử, giá trị nạp mặc định được override qua factory/fixture để tạo kịch bản.
+- Một DB `lunara_spa` duy nhất cho mọi service, không tạo thêm DB theo service.
+- `ddl-auto: validate` mọi nơi trừ test. Cấm `update` trên nhánh merge.
+- Mock dataset CSV là ground truth cho demo/test, không phải data thật:
+  - `database/Production/`: mock quy mô lớn để demo, benchmark API.
+  - `database/Testing/`: mock gọn để dev/test nhanh, làm nền cho factory override.
+  - Nạp theo `database/IMPORT_ORDER.txt`, NULL là `\N`, file CRLF.
+- Khi kiểm thử, giá trị mock được override qua factory/fixture trong code để tạo kịch bản.
 
 Chi tiết:
 
-- Backend Spring Boot chịu trách nhiệm seeding và override. Placeholder cho 2 điểm chưa chốt:
-  - Factory: TBD, ví dụ `Instancio`/`EasyRandom`/`Builder` tự viết + `Testcontainers`.
-  - Vị trí ground truth: TBD, ví dụ `backend/src/test/fixtures/` hoặc `backend/src/main/resources/seed/`.
+- Backend Spring Boot chịu trách nhiệm seeding và override.
+- Thư viện fixture chốt: `org.instancio:instancio-junit` bản 6.0.0.
+- Khung mẫu ở `templates/test-fixtures/`: `EntityFixtures` cho entity/DTO,
+  `DbFixtures` cho repository test, `ControllerFixtures` cho controller test.
+  Copy vào `backend/src/test/java/<package-goc>/fixtures/` rồi rename package.
+- Vị trí ground truth: TBD, ví dụ `backend/src/test/fixtures/` hoặc `backend/src/main/resources/seed/`.
 - Mock frontend ở `frontend/lunara/src/data/` chỉ phục vụ UI, không seed DB.
 - Hạ tầng không nhận file `database/*.sql` chứa `INSERT` hay CSV seed.
+
+## Stack local
+
+- `db`: MySQL 8.4, seed từ template, healthcheck trước khi app khởi động.
+- `redis`: Redis 7, phụ thuộc chính thức của backend.
+- `backend`: build từ `templates/Dockerfile.backend` chung với context root repo, yêu cầu module có `pom.xml` + `mvnw`.
+- `frontend`: placeholder tới khi có `Dockerfile` riêng.
 
 ## Workflow local
 
 Chạy từ thư mục gốc:
 
 ```sh
-make up          # khởi động DB template, chưa có data
-make up-app      # full stack khi backend/app và frontend/app có Dockerfile
+make up          # khởi động DB template + Redis, chưa có data
+make up-app      # full stack khi backend đã có pom.xml
 make down        # dừng
 make logs SERVICE=db
 make seed        # nạp lại schema template (alias: make schema)
+make seed-demo   # nạp mock dataset Production
+make seed-test   # nạp mock dataset Testing
 make validate    # kiểm đủ 15 bảng trong database/expected_tables.txt
 make test-backend # chạy test backend với factory override, skip nếu chưa có code
 ```

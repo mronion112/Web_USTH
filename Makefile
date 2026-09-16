@@ -10,21 +10,31 @@ MYSQL_DATABASE := $(or $(shell grep -E '^MYSQL_DATABASE=' $(ENV_FILE) 2>/dev/nul
 
 TABLES = $(shell cat database/expected_tables.txt)
 
-.PHONY: help check-env up up-app down logs seed schema validate test-backend
+# Biến bắt buộc trong templates/.env, khớp application.yml (không fallback).
+REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET FRONTEND_URL BACKEND_PORT
+
+.PHONY: help check-env up up-app down logs seed schema seed-dataset seed-demo seed-test validate test-backend
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động stack local (DB template, chưa có data)"
-	@echo "  up-app       Khởi động full stack (database, backend, frontend)"
+	@echo "  up           Khởi động stack local (DB template + Redis, chưa có data)"
+	@echo "  up-app       Khởi động full stack (database, redis, backend, frontend)"
 	@echo "  down         Dừng stack local"
 	@echo "  logs         Xem log, ví dụ: make logs SERVICE=db"
 	@echo "  seed         Nạp lại schema template database/Web_DataBase_USTH.sql (không kèm data)"
 	@echo "  schema       Alias của seed"
+	@echo "  seed-demo    Nạp mock dataset Production (demo, benchmark)"
+	@echo "  seed-test    Nạp mock dataset Testing (dev, test nhanh)"
 	@echo "  validate     Kiểm tra đủ bảng theo kỳ vọng"
 	@echo "  test-backend Chạy test backend với factory override (bỏ qua nếu chưa có code)"
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "Thiếu $(ENV_FILE). Chạy: cp templates/.env.example $(ENV_FILE)" >&2; exit 1)
+	@missing=""; \
+	for v in $(REQUIRED_VARS); do \
+		if ! grep -qE "^$$v=.+" $(ENV_FILE); then missing="$$missing $$v"; fi; \
+	done; \
+	if [ -n "$$missing" ]; then echo "Thiếu biến trong $(ENV_FILE):$$missing" >&2; exit 1; fi
 
 up: check-env
 	$(COMPOSE) up -d
@@ -45,6 +55,34 @@ seed: check-env
 
 schema: seed
 
+# Nạp mock dataset CSV theo database/IMPORT_ORDER.txt.
+# DATASET=Production cho demo, Testing cho dev/test. CSV là mock, CRLF, NULL là \N.
+seed-demo: DATASET=Production
+seed-demo: seed-dataset
+
+seed-test: DATASET=Testing
+seed-test: seed-dataset
+
+seed-dataset: seed
+	@test -d database/$(DATASET) || (echo "Thiếu database/$(DATASET). Merge nhánh data trước." >&2; exit 1)
+	@echo "Nạp mock dataset $(DATASET)..."
+	@$(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -e \
+		"SET GLOBAL local_infile=1; SET FOREIGN_KEY_CHECKS=0;"
+	@for f in $$(sed 's/^[0-9]*\. //;s/\.csv$$//' database/IMPORT_ORDER.txt); do \
+		$(COMPOSE) cp database/$(DATASET)/$$f.csv db:/tmp/seed_$$f.csv; \
+		$(COMPOSE) exec -T db mysql --local-infile=1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" \
+			$(MYSQL_DATABASE) -e \
+			"LOAD DATA LOCAL INFILE '/tmp/seed_$$f.csv' INTO TABLE $$f \
+			FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\r\n' \
+			IGNORE 1 LINES;"; \
+		echo "  $$f: $$($(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -N \
+			-e "SELECT COUNT(*) FROM $(MYSQL_DATABASE).$$f;") rows"; \
+	done
+	@$(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -e \
+		"SET FOREIGN_KEY_CHECKS=1;"
+	@$(COMPOSE) exec -T db sh -c 'rm -f /tmp/seed_*.csv'
+	@echo "Đã nạp xong mock dataset $(DATASET)."
+
 validate: check-env
 	$(COMPOSE) up -d db
 	@echo "Đang chờ database..."
@@ -62,8 +100,8 @@ validate: check-env
 	echo "Database OK: đủ $(words $(TABLES)) bảng theo kỳ vọng."
 
 test-backend:
-	@if [ -f backend/app/pom.xml ]; then \
-		mvn -B -f backend/app/pom.xml test; \
+	@if [ -f backend/pom.xml ]; then \
+		mvn -B -f backend/pom.xml test; \
 	else \
 		echo "Chưa có code backend, đã bỏ qua."; \
 	fi
