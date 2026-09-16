@@ -51,3 +51,16 @@ make seed-test   # nạp mock dataset Testing
 make validate    # kiểm đủ 15 bảng trong database/expected_tables.txt
 make test-backend # chạy test backend với factory override, skip nếu chưa có code
 ```
+
+## Bảo vệ file hạ tầng
+
+File hạ tầng do infra sở hữu: `Makefile`, `templates/`, `.github/`,
+`docs/`, `database/expected_tables.txt`, `.gitignore` phần env.
+
+- Kiểm tra local: `make verify-infra` liệt kê file đổi khác so với
+  `origin/main` (đổi baseline bằng `make verify-infra BASELINE=<ref>`).
+- Đổi ngoài ý muốn thì restore: `git checkout <baseline> -- <đường-dẫn>`.
+- Job CI `infra-guard` chạy trên mọi PR: xóa file hạ tầng thì fail,
+  sửa thì pass kèm bảng liệt kê để reviewer xác nhận.
+- Nhánh feature được thêm file mới ngoài các đường dẫn trên bình thường.
+  Sửa file hạ tầng có lý do thì giữ lại và ghi lý do vào PR.
