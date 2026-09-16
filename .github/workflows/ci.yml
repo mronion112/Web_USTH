@@ -26,6 +26,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Chờ MySQL sẵn sàng
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h127.0.0.1 --silent; then
+              echo "MySQL đã sẵn sàng."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL không sẵn sàng sau 60 giây." >&2
+          exit 1
+
       - name: Nạp schema
         env:
           MYSQL_PWD: test-root
@@ -74,6 +88,21 @@ jobs:
           --health-retries=20
     steps:
       - uses: actions/checkout@v4
+
+      - name: Chờ MySQL sẵn sàng
+        if: hashFiles('backend/pom.xml') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h127.0.0.1 --silent; then
+              echo "MySQL đã sẵn sàng."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL không sẵn sàng sau 60 giây." >&2
+          exit 1
 
       - name: Nạp schema cho test
         if: hashFiles('backend/pom.xml') != ''
