@@ -1,13 +1,13 @@
 server:
-  port: 8080
+  port: ${BACKEND_PORT:8080}
 
 spring:
   application:
     name: lunara-spa
   datasource:
-    url: jdbc:mysql://localhost:3306/lunara_spa?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&autoReconnect=true
-    username: root
-    password: thichbai
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/lunara_spa?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&autoReconnect=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -19,19 +19,19 @@ spring:
         format_sql: true
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   security:
     oauth2:
       client:
         registration:
           google:
-            client-id: your-client-id
-            client-secret: your-client-secret
+            client-id: ${GOOGLE_CLIENT_ID:your-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:your-client-secret}
             scope: email, profile
 
 app:
   jwt:
-    secret: 1234567890123456789012345678901234567890123456789012345678901234
+    secret: ${JWT_SECRET:1234567890123456789012345678901234567890123456789012345678901234}
     access-expiration-ms: 900000
-    refresh-expiration-ms: 86400000
+    refresh-expiration-ms: ${JWT_EXPIRATION_MS:86400000}
