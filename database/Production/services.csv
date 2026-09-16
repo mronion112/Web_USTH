@@ -1,0 +1,13 @@
+id,name,category,description,image_url,base_price,minimum_duration_minutes,is_duration_adjustable,duration_step_minutes,price_per_duration_step,preparation_buffer_minutes,cleanup_buffer_minutes,display_order,is_active,created_at,updated_at
+1,Facial Basic Care,FACIAL,"Chăm sóc da mặt cơ bản, làm sạch và cấp ẩm.",/images/services/facial-basic.jpg,350000,60,1,30,120000,10,10,1,1,2026-01-11 09:00:00,2026-08-21 10:00:00
+2,Deep Cleansing Facial,FACIAL,"Làm sạch sâu, hỗ trợ da dầu và bít tắc.",/images/services/deep-cleansing.jpg,480000,75,0,\N,\N,10,15,2,1,2026-01-12 09:00:00,2026-08-22 10:00:00
+3,Hydrating Facial,FACIAL,Liệu trình cấp ẩm chuyên sâu.,/images/services/hydrating.jpg,520000,60,1,30,150000,10,10,3,1,2026-01-13 09:00:00,2026-08-23 10:00:00
+4,Relaxing Body Massage,MASSAGE,Massage thư giãn toàn thân.,/images/services/body-massage.jpg,450000,60,1,30,180000,5,10,4,1,2026-01-14 09:00:00,2026-08-24 10:00:00
+5,Aromatherapy Massage,MASSAGE,Massage tinh dầu thư giãn.,/images/services/aroma-massage.jpg,520000,60,1,30,200000,5,10,5,1,2026-01-15 09:00:00,2026-08-25 10:00:00
+6,Hot Stone Massage,MASSAGE,Massage đá nóng giảm căng cơ.,/images/services/hot-stone.jpg,650000,90,0,\N,\N,10,15,6,1,2026-01-16 09:00:00,2026-08-26 10:00:00
+7,Head & Shoulder Therapy,MASSAGE,"Thư giãn đầu, cổ và vai gáy.",/images/services/head-shoulder.jpg,280000,45,0,\N,\N,5,5,7,1,2026-01-17 09:00:00,2026-08-27 10:00:00
+8,Body Scrub,BODY,Tẩy tế bào chết toàn thân.,/images/services/body-scrub.jpg,420000,60,0,\N,\N,10,15,8,1,2026-01-18 09:00:00,2026-08-28 10:00:00
+9,Body Detox Wrap,BODY,Ủ dưỡng và chăm sóc cơ thể.,/images/services/body-wrap.jpg,580000,75,0,\N,\N,10,15,9,1,2026-01-19 09:00:00,2026-08-29 10:00:00
+10,Foot Relaxation,FOOT,Chăm sóc và massage bàn chân.,/images/services/foot.jpg,250000,45,1,15,80000,5,5,10,1,2026-01-20 09:00:00,2026-08-30 10:00:00
+11,Premium Facial Renewal,FACIAL,Liệu trình facial cao cấp phục hồi da.,/images/services/premium-facial.jpg,850000,90,0,\N,\N,15,15,11,1,2026-01-21 09:00:00,2026-08-31 10:00:00
+12,Classic Body Treatment,BODY,"Gói chăm sóc cơ thể cổ điển, hiện ngừng nhận booking mới.",/images/services/classic-body.jpg,390000,60,0,\N,\N,10,10,12,0,2026-01-22 09:00:00,2026-09-01 10:00:00

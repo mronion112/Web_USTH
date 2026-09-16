@@ -1,0 +1,104 @@
+{
+  "Production": {
+    "table_row_counts": {
+      "roles": 6,
+      "permissions": 18,
+      "role_permissions": 61,
+      "accounts": 173,
+      "customer_profiles": 145,
+      "staff_profiles": 16,
+      "services": 12,
+      "staff_services": 128,
+      "staff_working_hours": 90,
+      "staff_time_off": 28,
+      "bookings": 600,
+      "booking_items": 645,
+      "booking_events": 2853,
+      "payments": 600,
+      "feedback": 213
+    },
+    "booking_status_counts": {
+      "COMPLETED": 300,
+      "PENDING_PAYMENT": 70,
+      "PENDING": 80,
+      "CONFIRMED": 120,
+      "CHECKED_IN": 15,
+      "IN_SERVICE": 15
+    },
+    "payment_status_counts": {
+      "PAID": 524,
+      "REFUNDED": 6,
+      "FAILED": 14,
+      "UNPAID": 56
+    },
+    "validation_errors": 0,
+    "feedback_rating_counts": {
+      "4": 75,
+      "5": 97,
+      "3": 28,
+      "2": 7,
+      "1": 6
+    },
+    "payment_method_counts": {
+      "AT_SPA": 229,
+      "QR": 178,
+      "CARD": 193
+    },
+    "assignment_source_counts": {
+      "ADMIN": 159,
+      "SYSTEM": 249,
+      "CUSTOMER": 192
+    }
+  },
+  "Testing": {
+    "table_row_counts": {
+      "roles": 6,
+      "permissions": 18,
+      "role_permissions": 61,
+      "accounts": 20,
+      "customer_profiles": 12,
+      "staff_profiles": 4,
+      "services": 6,
+      "staff_services": 18,
+      "staff_working_hours": 24,
+      "staff_time_off": 5,
+      "bookings": 30,
+      "booking_items": 32,
+      "booking_events": 127,
+      "payments": 30,
+      "feedback": 8
+    },
+    "booking_status_counts": {
+      "COMPLETED": 10,
+      "PENDING_PAYMENT": 5,
+      "PENDING": 4,
+      "CONFIRMED": 7,
+      "CHECKED_IN": 2,
+      "IN_SERVICE": 2
+    },
+    "payment_status_counts": {
+      "REFUNDED": 1,
+      "PAID": 24,
+      "FAILED": 3,
+      "UNPAID": 2
+    },
+    "validation_errors": 0,
+    "feedback_rating_counts": {
+      "1": 1,
+      "2": 1,
+      "3": 1,
+      "4": 2,
+      "5": 3
+    },
+    "payment_method_counts": {
+      "CARD": 15,
+      "AT_SPA": 8,
+      "QR": 7
+    },
+    "assignment_source_counts": {
+      "CUSTOMER": 15,
+      "SYSTEM": 8,
+      "ADMIN": 7
+    }
+  }
+}
