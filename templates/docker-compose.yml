@@ -3,6 +3,9 @@
 # Quy tắc DB: database/Web_DataBase_USTH.sql là template cố định chỉ DDL,
 # một DB lunara_spa duy nhất cho mọi service. Data do code nạp qua
 # factory/fixture, không seed sẵn trong compose. ddl-auto: validate.
+# Mock dataset CSV (database/Production, database/Testing) nạp thủ công
+# từ host bằng make seed-demo / seed-test, không mount vào entrypoint
+# để tránh nạp nhầm Production mỗi lần khởi động.
 #
 # Chạy từ thư mục gốc:
 #   cp templates/.env.example templates/.env

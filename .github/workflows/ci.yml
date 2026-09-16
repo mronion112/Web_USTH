@@ -152,3 +152,67 @@ jobs:
       - name: Báo cáo bỏ qua build
         if: hashFiles('backend/pom.xml') == '' && hashFiles('frontend/lunara/package.json') == ''
         run: echo "Chưa có code ứng dụng, chỉ chạy db-validate."
+
+  data-import-check:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chờ MySQL sẵn sàng
+        if: hashFiles('database/Testing/*.csv') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h127.0.0.1 --silent; then
+              echo "MySQL đã sẵn sàng."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL không sẵn sàng sau 60 giây." >&2
+          exit 1
+
+      - name: Nạp mock dataset Testing
+        if: hashFiles('database/Testing/*.csv') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
+          mysql -h127.0.0.1 -uroot -e "SET GLOBAL local_infile=1; SET FOREIGN_KEY_CHECKS=0;"
+          for f in $(sed 's/^[0-9]*\. //;s/\.csv$//' database/IMPORT_ORDER.txt); do
+            mysql --local-infile=1 -h127.0.0.1 -uroot lunara_spa -e \
+              "LOAD DATA LOCAL INFILE 'database/Testing/$f.csv' INTO TABLE $f \
+              FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\r\n' \
+              IGNORE 1 LINES;"
+          done
+          mysql -h127.0.0.1 -uroot -e "SET FOREIGN_KEY_CHECKS=1;"
+
+      - name: Kiểm tra row đã nạp
+        if: hashFiles('database/Testing/*.csv') != ''
+        env:
+          MYSQL_PWD: test-root
+        run: |
+          COUNT=$(mysql -h127.0.0.1 -uroot -N -e "SELECT COUNT(*) FROM lunara_spa.bookings;")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "Mock dataset OK: bookings có $COUNT rows."
+          else
+            echo "Mock dataset rỗng." >&2
+            exit 1
+          fi
+
+      - name: Báo cáo bỏ qua kiểm import
+        if: hashFiles('database/Testing/*.csv') == ''
+        run: echo "Chưa có mock dataset, đã bỏ qua."
