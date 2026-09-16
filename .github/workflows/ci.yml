@@ -216,3 +216,28 @@ jobs:
       - name: Báo cáo bỏ qua kiểm import
         if: hashFiles('database/Testing/*.csv') == ''
         run: echo "Chưa có mock dataset, đã bỏ qua."
+
+  infra-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Rà soát thay đổi hạ tầng
+        run: |
+          PATHS="Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore"
+          BASE="${{ github.base_ref }}"
+          if [ -z "$BASE" ]; then
+            echo "Không phải pull request, đã bỏ qua."
+            exit 0
+          fi
+          git fetch -q origin "$BASE" 2>/dev/null || true
+          DELETED=$(git diff --name-status "origin/$BASE"...HEAD -- $PATHS | grep '^D' || true)
+          if [ -n "$DELETED" ]; then
+            echo "$DELETED"
+            echo "Có file hạ tầng bị xóa, cần khôi phục trước khi merge." >&2
+            exit 1
+          fi
+          git diff --name-status "origin/$BASE"...HEAD -- $PATHS
+          echo "Xong. Sửa file hạ tầng cần reviewer xác nhận."

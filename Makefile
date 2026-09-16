@@ -13,7 +13,11 @@ TABLES = $(shell cat database/expected_tables.txt)
 # Biến bắt buộc trong templates/.env, khớp application.yml (không fallback).
 REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET FRONTEND_URL BACKEND_PORT
 
-.PHONY: help check-env up up-app down logs seed schema seed-dataset seed-demo seed-test validate test-backend
+# Đường dẫn hạ tầng do infra sở hữu. Baseline mặc định là origin/main.
+INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
+BASELINE ?= origin/main
+
+.PHONY: help check-env up up-app down logs seed schema seed-dataset seed-demo seed-test validate test-backend verify-infra
 
 help:
 	@echo "Targets:"
@@ -27,6 +31,7 @@ help:
 	@echo "  seed-test    Nạp mock dataset Testing (dev, test nhanh)"
 	@echo "  validate     Kiểm tra đủ bảng theo kỳ vọng"
 	@echo "  test-backend Chạy test backend với factory override (bỏ qua nếu chưa có code)"
+	@echo "  verify-infra Liệt kê file hạ tầng đổi khác so với baseline"
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "Thiếu $(ENV_FILE). Chạy: cp templates/.env.example $(ENV_FILE)" >&2; exit 1)
@@ -105,3 +110,14 @@ test-backend:
 	else \
 		echo "Chưa có code backend, đã bỏ qua."; \
 	fi
+
+# Liệt kê file hạ tầng đổi khác so với baseline (mặc định origin/main).
+# Đổi ngoài ý muốn thì restore: git checkout <baseline> -- <đường-dẫn>.
+# Xóa file hạ tầng thì fail để chặn merge nhầm.
+verify-infra:
+	@echo "Baseline: $(BASELINE)"
+	@deleted=$$(git diff --name-status $(BASELINE)...HEAD -- $(INFRA_PATHS) | grep '^D' || true); \
+	if [ -n "$$deleted" ]; then echo "$$deleted"; echo "Có file hạ tầng bị xóa." >&2; exit 1; fi
+	@git diff --name-status $(BASELINE)...HEAD -- $(INFRA_PATHS); \
+	git status --short -- $(INFRA_PATHS); \
+	echo "Xong. Trống nghĩa là hạ tầng khớp baseline."
