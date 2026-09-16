@@ -6,6 +6,7 @@ import java.util.Map;
 
 public interface AuthService {
     AccountResponseDTO getMe();
+    java.util.List<AccountResponseDTO> getAllAccounts();
     Map<String, String> refreshToken(Map<String, String> request);
     void logout(String authHeader, Map<String, String> request);
 }

@@ -12,7 +12,9 @@ import com.kevin.lunaraspa.authentication_account.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,8 +35,24 @@ public class AuthServiceImpl implements AuthService {
                 .id(account.getId())
                 .email(account.getEmail())
                 .displayName(account.getDisplayName())
+                .avatarUrl(account.getAvatarUrl())
                 .role(account.getRole().getCode())
+                .isActive(account.getIsActive())
                 .build();
+    }
+
+    @Override
+    public List<AccountResponseDTO> getAllAccounts() {
+        return accountRepository.findAll().stream()
+                .map(account -> AccountResponseDTO.builder()
+                        .id(account.getId())
+                        .email(account.getEmail())
+                        .displayName(account.getDisplayName())
+                        .avatarUrl(account.getAvatarUrl())
+                        .role(account.getRole().getCode())
+                        .isActive(account.getIsActive())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Override
