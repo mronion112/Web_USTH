@@ -49,10 +49,10 @@ up-app: check-env
 	$(COMPOSE) --profile app up -d --build
 
 down:
-	$(COMPOSE) down
+	$(COMPOSE) --profile app down
 
 down-all:
-	$(COMPOSE) down -v
+	$(COMPOSE) --profile app down -v
 
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
