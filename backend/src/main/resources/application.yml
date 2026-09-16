@@ -5,7 +5,7 @@ spring:
   application:
     name: lunara-spa
   datasource:
-    url: jdbc:mysql://localhost:3306/lunara_spa
+    url: jdbc:mysql://localhost:3306/lunara_spa?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&autoReconnect=true
     username: root
     password: thichbai
     driver-class-name: com.mysql.cj.jdbc.Driver
