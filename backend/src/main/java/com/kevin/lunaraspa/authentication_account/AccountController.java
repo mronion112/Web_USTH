@@ -18,3 +18,4 @@ public class AccountController {
         return ResponseBuilder.ok(authService.getAllAccounts());
     }
 }
+
