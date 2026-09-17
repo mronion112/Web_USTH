@@ -74,6 +74,7 @@ public final class ResponseBuilder {
     
     public static ApiResponse<Object> buildErrorResponse(HttpStatus status, String message, Object error) {
         return ApiResponse.builder()
+                .success(false)
                 .status(status.value())
                 .message(message)
                 .error(error)
@@ -95,6 +96,7 @@ public final class ResponseBuilder {
     
     private static <T> ApiResponse<T> buildApiResponse(T data, HttpStatus status, String message) {
         return ApiResponse.<T>builder()
+                .success(true)
                 .status(status.value())
                 .message(message)
                 .data(data)
