@@ -1,4 +1,4 @@
-# Stack local: MySQL + Redis + Spring Boot backend + React frontend.
+# Stack local: MySQL + Redis + Chroma + Spring Boot backend + React frontend.
 #
 # Quy tắc DB: database/Web_DataBase_USTH.sql là template cố định chỉ DDL,
 # một DB lunara_spa duy nhất cho mọi service. Data do code nạp qua
@@ -11,7 +11,7 @@
 #   cp templates/.env.example templates/.env
 #   docker compose -f templates/docker-compose.yml up
 #
-# Mặc định chỉ khởi động DB template và Redis, chưa có data.
+# Mặc định chỉ khởi động DB template, Redis và Chroma, chưa có data.
 # Khi backend đã có pom.xml, chạy full stack:
 #   docker compose -f templates/docker-compose.yml --profile app up --build
 
@@ -49,6 +49,22 @@ services:
       retries: 20
     restart: unless-stopped
 
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "${CHROMA_PORT:-8000}:8000"
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chroma_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   backend:
     profiles: ["app"]
     build:
@@ -65,10 +81,15 @@ services:
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?thiếu trong .env}
+      CHATBOT_DOCS_PATH: /app/docs
+      CHROMA_URL: http://chroma:8000
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      chroma:
         condition: service_healthy
     restart: unless-stopped
 
@@ -86,3 +107,4 @@ services:
 
 volumes:
   db_data:
+  chroma_data:

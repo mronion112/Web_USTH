@@ -7,22 +7,27 @@ ENV_FILE = templates/.env
 
 MYSQL_ROOT_PASSWORD := $(shell grep -E '^MYSQL_ROOT_PASSWORD=' $(ENV_FILE) 2>/dev/null | cut -d= -f2-)
 MYSQL_DATABASE := $(or $(shell grep -E '^MYSQL_DATABASE=' $(ENV_FILE) 2>/dev/null | cut -d= -f2-),lunara_spa)
+CHROMA_PORT := $(or $(shell grep -E '^CHROMA_PORT=' $(ENV_FILE) 2>/dev/null | cut -d= -f2-),8000)
 
 TABLES = $(shell cat database/expected_tables.txt)
 
 # Biến bắt buộc trong templates/.env, khớp application.yml (không fallback).
-REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET FRONTEND_URL BACKEND_PORT
+REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GEMINI_API_KEY FRONTEND_URL BACKEND_PORT
 
 # Đường dẫn hạ tầng do infra sở hữu. Baseline mặc định là origin/main.
 INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
 BASELINE ?= origin/main
 
-.PHONY: help check-env up up-app down logs seed schema seed-dataset seed-demo seed-test validate test-backend verify-infra
+.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed schema seed-dataset seed-demo seed-test validate test-backend verify-infra
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động stack local (DB template + Redis, chưa có data)"
-	@echo "  up-app       Khởi động full stack (database, redis, backend, frontend)"
+	@echo "  up           Khởi động MySQL + Redis + Chroma"
+	@echo "  chroma       Khởi động và kiểm tra Chroma DB"
+	@echo "  check-chroma Kiểm tra Chroma API heartbeat"
+	@echo "  up-app       Khởi động full stack (database, redis, chroma, backend, frontend)"
+	@echo "  test         Khởi động hạ tầng + nạp dataset Testing + chạy backend tests"
+	@echo "  demo         Khởi động hạ tầng + nạp dataset Production + chạy full stack"
 	@echo "  down         Dừng stack local"
 	@echo "  logs         Xem log, ví dụ: make logs SERVICE=db"
 	@echo "  seed         Nạp lại schema template database/Web_DataBase_USTH.sql (không kèm data)"
@@ -42,10 +47,34 @@ check-env:
 	if [ -n "$$missing" ]; then echo "Thiếu biến trong $(ENV_FILE):$$missing" >&2; exit 1; fi
 
 up: check-env
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d db redis chroma
+	$(MAKE) --no-print-directory check-chroma
+
+chroma:
+	$(COMPOSE) up -d chroma
+	$(MAKE) --no-print-directory check-chroma
+
+check-chroma:
+	@echo "Đang kiểm tra Chroma tại http://localhost:$(CHROMA_PORT)..."
+	@i=1; \
+	while [ $$i -le 30 ]; do \
+		if curl -fsS "http://localhost:$(CHROMA_PORT)/api/v2/heartbeat" >/dev/null 2>&1; then \
+			echo "Chroma OK."; exit 0; \
+		fi; \
+		i=$$((i + 1)); sleep 2; \
+	done; \
+	echo "Chroma chưa healthy sau 60 giây." >&2; \
+	$(COMPOSE) logs --tail=80 chroma; \
+	exit 1
 
 up-app: check-env
 	$(COMPOSE) --profile app up -d --build
+
+test: up seed-test test-backend
+	@echo "Đã hoàn tất workflow test với MySQL + Redis + Chroma."
+
+demo: up seed-demo up-app
+	@echo "Đã khởi động demo đầy đủ với dataset Production."
 
 down:
 	$(COMPOSE) down
@@ -106,7 +135,7 @@ validate: check-env
 
 test-backend:
 	@if [ -f backend/pom.xml ]; then \
-		mvn -B -f backend/pom.xml test; \
+		./backend/mvnw -B -f backend/pom.xml test; \
 	else \
 		echo "Chưa có code backend, đã bỏ qua."; \
 	fi
