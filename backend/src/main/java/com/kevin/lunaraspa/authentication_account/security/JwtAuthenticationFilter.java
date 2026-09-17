@@ -15,6 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Stream;
+import io.jsonwebtoken.JwtException;
 
 @Component
 @RequiredArgsConstructor
@@ -41,14 +42,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String email = jwtUtils.extractEmail(jwt);
-
-        if (email == null || SecurityContextHolder.getContext().getAuthentication() != null || jwtUtils.isTokenExpired(jwt)) {
+        final String email;
+        final String role;
+        boolean expired;
+        try {
+            email = jwtUtils.extractEmail(jwt);
+            expired = jwtUtils.extractExpiration(jwt) == null || jwtUtils.isTokenExpired(jwt);
+            role = jwtUtils.extractRole(jwt);
+        } catch (JwtException | IllegalArgumentException ex) {
+            // Invalid or expired bearer tokens must not turn into an HTTP 500.
             filterChain.doFilter(request, response);
             return;
         }
 
-        String role = jwtUtils.extractRole(jwt);
+        if (email == null || expired || SecurityContextHolder.getContext().getAuthentication() != null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         List<SimpleGrantedAuthority> authorities = Stream.ofNullable(role)
                 .map(SimpleGrantedAuthority::new)
                 .toList();

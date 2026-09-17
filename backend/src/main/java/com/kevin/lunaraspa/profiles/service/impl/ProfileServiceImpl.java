@@ -1,14 +1,17 @@
 package com.kevin.lunaraspa.profiles.service.impl;
 
+import com.kevin.lunaraspa.authentication_account.entity.Account;
+import com.kevin.lunaraspa.authentication_account.repository.AccountRepository;
 import com.kevin.lunaraspa.core.exception.AppException;
+import com.kevin.lunaraspa.core.exception.AuthErrorCode;
+import com.kevin.lunaraspa.core.exception.ProfileErrorCode;
 import com.kevin.lunaraspa.profiles.dto.ProfileResponseDTO;
 import com.kevin.lunaraspa.profiles.dto.ProfileUpdateRequest;
-import com.kevin.lunaraspa.authentication_account.entity.Account;
 import com.kevin.lunaraspa.profiles.entity.CustomerProfile;
-import com.kevin.lunaraspa.authentication_account.repository.AccountRepository;
 import com.kevin.lunaraspa.profiles.repository.CustomerProfileRepository;
-import com.kevin.lunaraspa.core.exception.AuthErrorCode;
+import com.kevin.lunaraspa.profiles.repository.StaffProfileRepository;
 import com.kevin.lunaraspa.profiles.service.ProfileService;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,77 +19,79 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ProfileServiceImpl implements ProfileService {
-
     private final AccountRepository accountRepository;
     private final CustomerProfileRepository customerProfileRepository;
+    private final StaffProfileRepository staffProfileRepository;
 
     @Override
     @Transactional(readOnly = true)
     public ProfileResponseDTO getMyProfile(String email) {
-        Account account = accountRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
-
-        String phone = null;
-        String preferences = null;
-
-        if ("CUSTOMER".equals(account.getRole().getCode())) {
-            CustomerProfile profile = customerProfileRepository.findById(account.getId()).orElse(null);
-            if (profile != null) {
-                phone = profile.getPhone();
-                preferences = profile.getPreferences();
-            }
-        }
-
-        return ProfileResponseDTO.builder()
-                .id(account.getId())
-                .displayName(account.getDisplayName())
-                .email(account.getEmail())
-                .phone(phone)
-                .preferences(preferences)
-                .role(account.getRole().getCode())
-                .build();
+        return response(activeAccount(email));
     }
 
     @Override
     @Transactional
     public ProfileResponseDTO updateMyProfile(String email, ProfileUpdateRequest request) {
-        Account account = accountRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
-
-        if (request.getDisplayName() != null) {
-            account.setDisplayName(request.getDisplayName());
+        Account account = activeAccount(email);
+        if (!"CUSTOMER".equals(account.getRole().getCode())) {
+            throw new AppException(ProfileErrorCode.PROFILE_FORBIDDEN);
+        }
+        if (request == null || !(request.isDisplayNamePresent() || request.isPhonePresent() || request.isPreferencesPresent())) {
+            throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
+        }
+        String name = normalize(request.getDisplayName());
+        String phone = normalize(request.getPhone());
+        String preferences = normalize(request.getPreferences());
+        if (request.isDisplayNamePresent() && (name == null || name.codePointCount(0, name.length()) > 150)) {
+            throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
+        }
+        if (phone != null && (phone.length() > 30 || !phone.matches("\\+?[0-9 ()-]+")
+                || phone.chars().filter(Character::isDigit).count() < 3)) {
+            throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
+        }
+        if (preferences != null && preferences.getBytes(StandardCharsets.UTF_8).length > 65535) {
+            throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
+        }
+        // Validate all input before mutating managed entities.
+        if (request.isDisplayNamePresent()) {
+            account.setDisplayName(name);
             accountRepository.save(account);
         }
+        CustomerProfile profile = customerProfileRepository.findById(account.getId())
+                .orElseGet(() -> CustomerProfile.builder().account(account).build());
+        if (request.isPhonePresent()) profile.setPhone(phone);
+        if (request.isPreferencesPresent()) profile.setPreferences(preferences);
+        customerProfileRepository.save(profile);
+        return baseResponse(account).phone(profile.getPhone()).preferences(profile.getPreferences()).build();
+    }
 
-        String phone = null;
-        String preferences = null;
+    private Account activeAccount(String email) {
+        Account account = accountRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
+        if (!Boolean.TRUE.equals(account.getIsActive())) throw new AppException(ProfileErrorCode.ACCOUNT_INACTIVE);
+        return account;
+    }
 
+    private ProfileResponseDTO response(Account account) {
+        var result = baseResponse(account);
         if ("CUSTOMER".equals(account.getRole().getCode())) {
-            CustomerProfile profile = customerProfileRepository.findById(account.getId())
-                    .orElseGet(() -> {
-                        CustomerProfile p = CustomerProfile.builder().account(account).build();
-                        return p;
-                    });
-            
-            if (request.getPhone() != null) {
-                profile.setPhone(request.getPhone());
-            }
-            if (request.getPreferences() != null) {
-                profile.setPreferences(request.getPreferences());
-            }
-            customerProfileRepository.save(profile);
-            
-            phone = profile.getPhone();
-            preferences = profile.getPreferences();
+            customerProfileRepository.findById(account.getId()).ifPresent(profile ->
+                    result.phone(profile.getPhone()).preferences(profile.getPreferences()));
+        } else {
+            staffProfileRepository.findById(account.getId()).ifPresent(profile -> result
+                    .employeeCode(profile.getEmployeeCode()).jobTitle(profile.getJobTitle())
+                    .isBookable(profile.getIsBookable()));
         }
+        return result.build();
+    }
 
-        return ProfileResponseDTO.builder()
-                .id(account.getId())
-                .displayName(account.getDisplayName())
-                .email(account.getEmail())
-                .phone(phone)
-                .preferences(preferences)
-                .role(account.getRole().getCode())
-                .build();
+    private ProfileResponseDTO.ProfileResponseDTOBuilder baseResponse(Account account) {
+        // Retain id for existing clients; accountId matches the Guide.
+        return ProfileResponseDTO.builder().id(account.getId()).accountId(account.getId())
+                .displayName(account.getDisplayName()).email(account.getEmail()).role(account.getRole().getCode());
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 }
