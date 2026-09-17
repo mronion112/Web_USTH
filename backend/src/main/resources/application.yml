@@ -46,3 +46,11 @@ app:
     secret: ${JWT_SECRET}
     access-expiration-ms: ${JWT_EXPIRATION_MS}
     refresh-expiration-ms: 86400000
+  chatbot:
+    gemini-api-key: ${GEMINI_API_KEY:}
+    generation-model: ${GEMINI_GENERATION_MODEL:gemini-2.5-flash}
+    embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+    docs-path: ${CHATBOT_DOCS_PATH:docs}
+    chunk-size: ${CHATBOT_CHUNK_SIZE:1600}
+    chunk-overlap: ${CHATBOT_CHUNK_OVERLAP:250}
+    default-top-k: ${CHATBOT_DEFAULT_TOP_K:5}

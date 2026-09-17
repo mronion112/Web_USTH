@@ -33,6 +33,7 @@ public class SecurityConfig {
                     "/api/v1/auth/logout",
                     "/api/v1/auth/csrf",
                     "/api/v1/auth/exchange",
+                    "/api/v1/chatbot/**",
                     "/oauth2/**",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",

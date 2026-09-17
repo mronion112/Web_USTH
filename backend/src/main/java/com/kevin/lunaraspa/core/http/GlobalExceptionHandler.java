@@ -1,5 +1,6 @@
 package com.kevin.lunaraspa.core.http;
 
+import com.kevin.lunaraspa.chatbot.ChatbotException;
 import com.kevin.lunaraspa.core.exception.AppException;
 import com.kevin.lunaraspa.core.exception.BaseErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,18 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(ChatbotException.class)
+    public ResponseEntity<ApiResponse<Object>> handleChatbotException(ChatbotException ex) {
+        log.error("Chatbot exception: {}", ex.getMessage(), ex);
+        ApiResponse<Object> response = ApiResponse.<Object>builder()
+                .success(false)
+                .status(HttpStatus.BAD_GATEWAY.value())
+                .message(ex.getMessage())
+                .error("CHATBOT_ERROR")
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
+    }
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Object>> handleAppException(AppException ex) {
