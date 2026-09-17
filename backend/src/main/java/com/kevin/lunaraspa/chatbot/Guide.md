@@ -1,12 +1,12 @@
 # RAG Chatbot API
 
 Module này trả lời câu hỏi dựa trên các file Markdown trong thư mục `docs` của repository.
-Gemini được dùng cho hai bước:
+Chroma được dùng để lưu persistent các vector và metadata; Gemini được dùng cho hai bước:
 
-1. `gemini-embedding-001` tạo embedding và tìm các đoạn tài liệu liên quan bằng cosine similarity.
+1. `gemini-embedding-001` tạo embedding; Chroma tìm các đoạn tài liệu liên quan bằng cosine similarity.
 2. `gemini-2.5-flash` sinh câu trả lời từ ngữ cảnh đã truy xuất.
 
-Index được tạo trong bộ nhớ ở request đầu tiên và dùng lại cho đến khi backend khởi động lại.
+Khi backend phát event `ApplicationReadyEvent`, toàn bộ Markdown được chunk, embed và upsert vào collection Chroma. ID chunk ổn định nên chạy lại không tạo bản ghi trùng; chunk không còn trong `docs` sẽ bị xóa khỏi collection.
 
 ## Cấu hình
 
@@ -15,9 +15,15 @@ GEMINI_API_KEY=your-google-ai-studio-key
 GEMINI_GENERATION_MODEL=gemini-2.5-flash
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 CHATBOT_DOCS_PATH=docs
+CHROMA_URL=http://localhost:8000
+CHROMA_TENANT=default_tenant
+CHROMA_DATABASE=default_database
+CHROMA_COLLECTION=lunara_spa_knowledge
+CHROMA_STARTUP_INDEXING=true
 ```
 
 Khi chạy Docker, `docs` được copy vào `/app/docs` và Compose tự cấu hình `CHATBOT_DOCS_PATH=/app/docs`.
+Chroma chạy ở service `chroma`, lưu dữ liệu trong volume `chroma_data`; backend tự cấu hình `CHROMA_URL=http://chroma:8000`.
 
 ## Request chung
 

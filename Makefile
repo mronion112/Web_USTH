@@ -11,7 +11,7 @@ MYSQL_DATABASE := $(or $(shell grep -E '^MYSQL_DATABASE=' $(ENV_FILE) 2>/dev/nul
 TABLES = $(shell cat database/expected_tables.txt)
 
 # Biến bắt buộc trong templates/.env, khớp application.yml (không fallback).
-REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET FRONTEND_URL BACKEND_PORT
+REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD REDIS_HOST REDIS_PORT JWT_SECRET JWT_EXPIRATION_MS GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GEMINI_API_KEY FRONTEND_URL BACKEND_PORT
 
 # Đường dẫn hạ tầng do infra sở hữu. Baseline mặc định là origin/main.
 INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
@@ -21,7 +21,7 @@ BASELINE ?= origin/main
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động stack local (DB template + Redis, chưa có data)"
+	@echo "  up           Khởi động stack local (DB template + Redis + Chroma, chưa có data)"
 	@echo "  up-app       Khởi động full stack (database, redis, backend, frontend)"
 	@echo "  down         Dừng stack local (giữ data trong volume)"
 	@echo "  down-all     Dừng stack và xóa volume (mất data, up lại seed từ template)"
