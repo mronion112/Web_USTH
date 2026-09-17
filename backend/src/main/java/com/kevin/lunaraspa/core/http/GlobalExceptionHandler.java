@@ -23,7 +23,7 @@ import java.util.Map;
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAppException(AppException ex) {
+    public ResponseEntity<Object> handleAppException(AppException ex) {
         BaseErrorCode errorCode = ex.getErrorCode();
         HttpStatus status = (errorCode != null && errorCode.getStatus() != null)
                 ? errorCode.getStatus()
@@ -35,13 +35,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         log.error("App exception: code={}, message={}", code, message, ex);
 
-        ApiResponse<Object> response = ApiResponse.<Object>builder()
-                .success(false)
-                .status(status.value())
-                .message(message)
-                .error(code)
-                .build();
-        return ResponseEntity.status(status).body(response);
+        return ResponseBuilder.error(status, message, code);
     }
 
     @Override
@@ -56,39 +50,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         (existing, replacement) -> existing
                 ));
 
-        ApiResponse<Map<String, String>> response = ApiResponse.<Map<String, String>>builder()
-                .success(false)
-                .status(HttpStatus.BAD_REQUEST.value())
-                .message("Validation Failed")
-                .error("VALIDATION_ERROR")
-                .data(errors)
-                .build();
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return ResponseBuilder.error(HttpStatus.BAD_REQUEST, "Validation Failed", errors);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+    public ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.error("Illegal argument: ", ex);
-        ApiResponse<Object> response = ApiResponse.<Object>builder()
-                .success(false)
-                .status(HttpStatus.BAD_REQUEST.value())
-                .message(ex.getMessage())
-                .error("BAD_REQUEST")
-                .build();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return ResponseBuilder.error(HttpStatus.BAD_REQUEST, ex.getMessage(), "BAD_REQUEST");
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Object>> handleAllExceptions(Exception ex) {
+    public ResponseEntity<Object> handleAllExceptions(Exception ex) {
         log.error("Unhandled exception: ", ex);
-        ApiResponse<Object> response = ApiResponse.<Object>builder()
-                .success(false)
-                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .message("Internal Server Error")
-                .error("INTERNAL_ERROR")
-                .data(ex.getMessage())
-                .build();
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return ResponseBuilder.error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", ex.getMessage());
     }
 }
