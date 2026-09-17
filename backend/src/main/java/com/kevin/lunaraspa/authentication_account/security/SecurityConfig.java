@@ -28,14 +28,17 @@ public class SecurityConfig {
             .cors(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    "/api/auth/refresh-token",
-                    "/api/auth/logout",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/refresh-token",
+                    "/api/v1/auth/logout",
+                    "/api/v1/auth/csrf",
+                    "/api/v1/auth/exchange",
                     "/oauth2/**",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html"
                 ).permitAll()
-                .requestMatchers("/api/auth/me").authenticated()
+                .requestMatchers("/api/v1/auth/me").authenticated()
                 .anyRequest().access(customAuthorizationManager)
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

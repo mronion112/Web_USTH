@@ -11,6 +11,8 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   const unsafe = !['GET', 'HEAD', 'OPTIONS'].includes(method);
   if (unsafe && !csrfCookie()) await fetch(`${API_ORIGIN}/api/v1/auth/csrf`, { credentials: 'include' });
   const headers = new Headers(init.headers);
+  const accessToken = localStorage.getItem('lunara.accessToken');
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (unsafe) headers.set('X-XSRF-TOKEN', csrfCookie());
   const response = await fetch(`${API_ORIGIN}${path}`, { ...init, method, headers, credentials: 'include' });
@@ -28,6 +30,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
 
 export const json = (value: unknown) => JSON.stringify(value);
 export const googleLogin = () => { window.location.assign(`${API_ORIGIN}/oauth2/authorization/google`); };
+export const exchangeOAuthCode = (code: string) => api<{ accessToken: string; refreshToken?: string }>('/api/v1/auth/exchange', { method: 'POST', body: json({ code }) });
 export const events = () => new EventSource(`${API_ORIGIN}/api/v1/events`, { withCredentials: true });
 
 export interface ApiService {
