@@ -29,6 +29,9 @@ Nguyên tắc:
 - DB local chỉ phục vụ dev và demo.
 - Tạo kịch bản bằng factory override (`EntityFixtures`, `DbFixtures`
   trong `templates/test-fixtures/`), cấm helper `insertX` private trùng logic.
+- Mọi `@SpringBootTest` mới phải tắt index RAG lúc test:
+  `@SpringBootTest(properties = "app.chatbot.chroma.startup-indexing=false")`,
+  kẻo CI gọi Chroma/Gemini thật.
 
 ## Test trên CI
 

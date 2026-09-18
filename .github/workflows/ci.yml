@@ -132,6 +132,8 @@ jobs:
           GOOGLE_CLIENT_ID: test-client-id
           GOOGLE_CLIENT_SECRET: test-client-secret
           FRONTEND_URL: http://localhost:5173
+          GEMINI_API_KEY: test-gemini-key
+          CHROMA_URL: http://127.0.0.1:8000
         run: mvn -B -f backend/pom.xml test
 
       - name: Cài Node

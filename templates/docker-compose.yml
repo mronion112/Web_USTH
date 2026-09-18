@@ -52,7 +52,7 @@ services:
 
   chroma:
     profiles: ["chroma"]
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.6.3
     ports:
       - "${CHROMA_PORT:-8000}:8000"
     environment:
