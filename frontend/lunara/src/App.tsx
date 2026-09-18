@@ -26,6 +26,7 @@ import { ReportsPage } from '@/pages/admin/ReportsPage';
 // Staff Flow
 import { MyWorkPage } from '@/pages/staff/MyWorkPage';
 import { MyCalendarPage } from '@/pages/staff/MyCalendarPage';
+import { OAuth2RedirectPage } from '@/pages/OAuth2RedirectPage';
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
             {/* Customer Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/oauth2/redirect" element={<OAuth2RedirectPage />} />
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/ticket/:id" element={<TicketPage />} />

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 @Tag(name = "Authentication", description = "Đăng nhập, refresh token, logout và thông tin tài khoản hiện tại")
 @RequiredArgsConstructor
 public class AuthController {
@@ -26,7 +26,7 @@ public class AuthController {
         return ResponseBuilder.ok(authService.getMe());
     }
 
-    @PostMapping("/refresh-token")
+    @PostMapping({"/refresh", "/refresh-token"})
     @Operation(summary = "Cấp access token mới từ refresh token")
     public ResponseEntity<Object> refreshToken(@RequestBody Map<String, String> request) {
         return ResponseBuilder.ok(authService.refreshToken(request));
@@ -38,6 +38,13 @@ public class AuthController {
                                          @RequestBody(required = false) Map<String, String> request) {
         authService.logout(authHeader, request);
         return ResponseBuilder.ok(Map.of("message", "Logged out successfully"));
+    }
+
+    /** CSRF protection is disabled for this stateless JWT API; this is a frontend-compatible no-op. */
+    @GetMapping("/csrf")
+    @Operation(summary = "Khởi tạo CSRF cho frontend", description = "No-op khi CSRF protection đang tắt.")
+    public ResponseEntity<Void> csrf() {
+        return ResponseEntity.noContent().build();
     }
     @PostMapping("/exchange")
     @Operation(summary = "Đổi thông tin xác thực OAuth2 thành token ứng dụng")

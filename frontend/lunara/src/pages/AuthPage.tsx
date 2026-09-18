@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,13 +6,9 @@ import { Sparkles, Shield, CheckCircle2 } from 'lucide-react';
 import { IMAGES } from '@/lib/assets';
 
 export const AuthPage: React.FC = () => {
-  const navigate = useNavigate();
   const { login } = useAuth();
 
-  const handleGoogleAuth = () => {
-    login('CUSTOMER');
-    navigate('/booking');
-  };
+  const handleGoogleAuth = () => login();
 
   return (
     <div className="min-h-screen bg-[#F8F9F5] flex flex-col font-body">

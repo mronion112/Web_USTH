@@ -1,76 +1,28 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Play, CheckCircle2, User, Sparkles, Calendar } from 'lucide-react';
-
-interface WorkTask {
-  id: string;
-  timeRange: string;
-  customerName: string;
-  customerPhone: string;
-  serviceName: string;
-  durationMinutes: number;
-  note?: string;
-  status: 'UPCOMING' | 'CHECKED_IN' | 'IN_SERVICE' | 'COMPLETED';
-}
+import { api, ApiBooking, events } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const MyWorkPage: React.FC = () => {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'IN_SERVICE' | 'CHECKED_IN' | 'COMPLETED'>('ALL');
-
-  const [tasks, setTasks] = useState<WorkTask[]>([
-    {
-      id: 'TASK-01',
-      timeRange: '10:00 — 11:30',
-      customerName: 'Hoàng Kim Ngân',
-      customerPhone: '0933 889 900',
-      serviceName: 'Gói VIP Thư Thái Toàn Thân',
-      durationMinutes: 90,
-      note: 'Phòng VIP Suite 01. Trà hoa cúc sau dịch vụ.',
-      status: 'COMPLETED',
-    },
-    {
-      id: 'TASK-02',
-      timeRange: '14:00 — 15:00',
-      customerName: 'Nguyễn Văn An',
-      customerPhone: '0912 345 678',
-      serviceName: 'Massage Thư Giãn Thảo Mộc',
-      durationMinutes: 60,
-      note: 'Tập trung vùng vai gáy, lực vừa phải.',
-      status: 'IN_SERVICE',
-    },
-    {
-      id: 'TASK-03',
-      timeRange: '15:30 — 16:30',
-      customerName: 'Lê Minh Châu',
-      customerPhone: '0904 112 233',
-      serviceName: 'Chăm Sóc Da Mặt Chuyên Sâu',
-      durationMinutes: 60,
-      note: 'Khách có da nhạy cảm với cồn.',
-      status: 'CHECKED_IN',
-    },
-    {
-      id: 'TASK-04',
-      timeRange: '17:00 — 18:00',
-      customerName: 'Trần Thị Hằng',
-      customerPhone: '0988 123 456',
-      serviceName: 'Đá Nóng Himalaya',
-      durationMinutes: 60,
-      status: 'UPCOMING',
-    },
-  ]);
-
-  const handleStartService = (taskId: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: 'IN_SERVICE' } : t))
-    );
+  const [tasks, setTasks] = useState<ApiBooking[]>([]);
+  const [error, setError] = useState('');
+  const reload = useCallback(() => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    const value = (type: string) => parts.find((part) => part.type === type)?.value || '';
+    const date = `${value('year')}-${value('month')}-${value('day')}`;
+    void api<ApiBooking[]>(`/api/v1/admin/bookings?date=${date}`).then(setTasks).catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => { reload(); const source = events(); source.addEventListener('booking.events', reload); const poll = window.setInterval(reload, 10000); return () => { source.close(); window.clearInterval(poll); }; }, [reload]);
+  const transition = async (task: ApiBooking, action: 'start' | 'complete') => {
+    try { await api(`/api/v1/bookings/${task.bookingCode}/${action}`, { method: 'POST' }); setError(''); reload(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Không cập nhật được dịch vụ'); }
   };
-
-  const handleCompleteService = (taskId: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: 'COMPLETED' } : t))
-    );
-  };
+  const time = (value: string) => new Date(value).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' });
 
   const filteredTasks = tasks.filter((t) => {
     if (activeFilter === 'ALL') return true;
@@ -89,15 +41,16 @@ export const MyWorkPage: React.FC = () => {
             Công việc hôm nay
           </h1>
           <p className="text-xs text-[#6B726C] mt-1">
-            Chuyên viên: <strong className="text-[#14271C]">Nguyễn Thị Linh</strong> · Ca trực: 09:00 — 18:00
+            Chuyên viên: <strong className="text-[#14271C]">{user?.displayName || '—'}</strong>
           </p>
         </div>
 
         <div className="flex items-center gap-2 bg-white border border-[#E2E8E3] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-[#1E3B2B]">
           <Calendar className="h-4 w-4 text-[#8EAA97]" />
-          <span>Hôm nay · 14/09/2026</span>
+          <span>Hôm nay · {new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
         </div>
       </div>
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap gap-2">
@@ -128,9 +81,9 @@ export const MyWorkPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8E3] pb-3">
               <div className="flex items-center gap-2">
                 <span className="font-mono font-bold text-sm text-[#1E3B2B] bg-[#E8F5E9] px-2.5 py-1 rounded-lg">
-                  {task.timeRange}
+                  {time(task.bookingStart)} — {time(task.bookingEnd)}
                 </span>
-                <span className="text-xs text-[#8EAA97]">({task.durationMinutes} phút)</span>
+                <span className="text-xs text-[#8EAA97]">({task.totalDurationMinutes} phút)</span>
               </div>
 
               <Badge
@@ -156,27 +109,21 @@ export const MyWorkPage: React.FC = () => {
 
             <div className="space-y-1">
               <h3 className="font-display font-semibold text-xl text-[#14271C]">
-                {task.serviceName}
+                {task.items.map((item) => item.serviceNameSnapshot).join(', ')}
               </h3>
               <div className="flex items-center gap-4 text-xs text-[#526056]">
                 <span className="flex items-center gap-1 font-medium">
-                  <User className="h-3.5 w-3.5 text-[#8EAA97]" /> Khách hàng: {task.customerName}
+                  <User className="h-3.5 w-3.5 text-[#8EAA97]" /> Khách hàng: {task.customerNameSnapshot}
                 </span>
-                <span>ĐT: {task.customerPhone}</span>
+                <span>ĐT: {task.customerPhoneSnapshot || '—'}</span>
               </div>
             </div>
-
-            {task.note && (
-              <div className="rounded-xl bg-[#F8F9F5] p-3 text-xs text-[#526056] border border-[#E2E8E3]/60">
-                <strong className="text-[#14271C]">Lưu ý:</strong> {task.note}
-              </div>
-            )}
 
             {/* Actions for Therapist */}
             <div className="pt-2 flex items-center justify-end gap-3">
               {task.status === 'CHECKED_IN' && (
                 <Button
-                  onClick={() => handleStartService(task.id)}
+                  onClick={() => void transition(task, 'start')}
                   className="rounded-xl h-11 px-6 bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold shadow-sm"
                 >
                   <Play className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
@@ -186,7 +133,7 @@ export const MyWorkPage: React.FC = () => {
 
               {task.status === 'IN_SERVICE' && (
                 <Button
-                  onClick={() => handleCompleteService(task.id)}
+                  onClick={() => void transition(task, 'complete')}
                   className="rounded-xl h-11 px-6 bg-[#2E7D32] text-white hover:bg-[#1b5e20] text-xs font-semibold shadow-sm"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />

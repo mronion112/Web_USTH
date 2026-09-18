@@ -1,6 +1,7 @@
 package com.kevin.lunaraspa.feedback.entity;
 
 import com.kevin.lunaraspa.core.data.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

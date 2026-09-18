@@ -21,7 +21,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -46,3 +46,19 @@ app:
     secret: ${JWT_SECRET}
     access-expiration-ms: ${JWT_EXPIRATION_MS}
     refresh-expiration-ms: 86400000
+  chatbot:
+    gemini-api-key: ${GEMINI_API_KEY:}
+    generation-model: ${GEMINI_GENERATION_MODEL:gemini-2.5-flash}
+    embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+    docs-path: ${CHATBOT_DOCS_PATH:docs}
+    chunk-size: ${CHATBOT_CHUNK_SIZE:1600}
+    chunk-overlap: ${CHATBOT_CHUNK_OVERLAP:250}
+    default-top-k: ${CHATBOT_DEFAULT_TOP_K:5}
+    chroma:
+      url: ${CHROMA_URL:http://localhost:8000}
+      tenant: ${CHROMA_TENANT:default_tenant}
+      database: ${CHROMA_DATABASE:default_database}
+      collection: ${CHROMA_COLLECTION:lunara_spa_knowledge}
+      api-key: ${CHROMA_API_KEY:}
+      startup-indexing: ${CHROMA_STARTUP_INDEXING:true}
+      upsert-batch-size: ${CHROMA_UPSERT_BATCH_SIZE:100}

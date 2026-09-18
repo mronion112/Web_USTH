@@ -56,7 +56,7 @@ Token được đính kèm vào URL (ví dụ: `http://localhost:3000/oauth2/red
 **Endpoint**
 
 ```text
-/api/auth/me
+/api/v1/auth/me
 ```
 
 **Method**

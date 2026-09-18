@@ -28,7 +28,8 @@ help:
 	@echo "  up-app       Khởi động full stack (database, redis, chroma, backend, frontend)"
 	@echo "  test         Khởi động hạ tầng + nạp dataset Testing + chạy backend tests"
 	@echo "  demo         Khởi động hạ tầng + nạp dataset Production + chạy full stack"
-	@echo "  down         Dừng stack local"
+	@echo "  down         Dừng stack local (giữ data trong volume)"
+	@echo "  down-all     Dừng stack và xóa volume (mất data, up lại seed từ template)"
 	@echo "  logs         Xem log, ví dụ: make logs SERVICE=db"
 	@echo "  seed         Nạp lại schema template database/Web_DataBase_USTH.sql (không kèm data)"
 	@echo "  schema       Alias của seed"
@@ -77,7 +78,10 @@ demo: up seed-demo up-app
 	@echo "Đã khởi động demo đầy đủ với dataset Production."
 
 down:
-	$(COMPOSE) down
+	$(COMPOSE) --profile app down
+
+down-all:
+	$(COMPOSE) --profile app down -v
 
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
