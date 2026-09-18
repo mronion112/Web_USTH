@@ -69,7 +69,7 @@ check-chroma:
 	exit 1
 
 up-app: check-env
-	CHROMA_ENABLED=true CHROMA_STARTUP_INDEXING=true $(COMPOSE) --profile app up -d --build
+	$(COMPOSE) --profile app up -d --build
 
 test: up seed-test test-backend
 	@echo "Đã hoàn tất workflow test với MySQL + Redis (không cần Chroma)."
