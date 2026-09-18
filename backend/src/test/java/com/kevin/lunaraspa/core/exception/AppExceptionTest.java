@@ -76,12 +76,12 @@ class AppExceptionTest {
     @Test
     void testGlobalExceptionHandlerTranslatesAppException() {
         AppException ex = new AppException(SampleErrorCode.RESOURCE_NOT_FOUND);
-        ResponseEntity<ApiResponse<Object>> responseEntity = exceptionHandler.handleAppException(ex);
+        ResponseEntity<Object> responseEntity = exceptionHandler.handleAppException(ex);
 
         assertNotNull(responseEntity);
         assertEquals(HttpStatus.NOT_FOUND, responseEntity.getStatusCode());
 
-        ApiResponse<Object> body = responseEntity.getBody();
+        ApiResponse<Object> body = (ApiResponse<Object>) responseEntity.getBody();
         assertNotNull(body);
         assertEquals(Boolean.FALSE, body.getSuccess());
         assertEquals(404, body.getStatus());

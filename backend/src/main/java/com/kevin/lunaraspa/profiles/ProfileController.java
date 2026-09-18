@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/profile")
@@ -23,12 +24,13 @@ public class ProfileController {
     @GetMapping("/me")
     @Operation(summary = "Lấy hồ sơ người dùng hiện tại")
     public ResponseEntity<Object> getMyProfile() {
-        return ResponseBuilder.ok(profileService.getMyProfile(SecurityUtils.getCurrentUserEmail()));
+        return ResponseBuilder.ok(profileService.getMyProfile(SecurityUtils.getCurrentUserEmail()), "Get profile successfully");
     }
 
     @PutMapping("/me")
     @Operation(summary = "Cập nhật hồ sơ người dùng hiện tại")
-    public ResponseEntity<Object> updateMyProfile(@RequestBody ProfileUpdateRequest request) {
-        return ResponseBuilder.ok(profileService.updateMyProfile(SecurityUtils.getCurrentUserEmail(), request));
+    public ResponseEntity<Object> updateMyProfile(@RequestBody Map<String, Object> body) {
+        return ResponseBuilder.ok(profileService.updateMyProfile(SecurityUtils.getCurrentUserEmail(),
+                ProfileUpdateRequest.from(body)), "Update profile successfully");
     }
 }
