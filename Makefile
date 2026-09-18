@@ -87,7 +87,7 @@ logs:
 
 seed: check-env
 	$(COMPOSE) up -d --wait db
-	$(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" < database/Web_DataBase_USTH.sql
+	$(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" < database/Web_DataBase_USTH.sql
 	@echo "Đã nạp lại schema template từ database/Web_DataBase_USTH.sql (không kèm data)"
 
 schema: seed
@@ -103,19 +103,19 @@ seed-test: seed-dataset
 seed-dataset: seed
 	@test -d database/$(DATASET) || (echo "Thiếu database/$(DATASET). Merge nhánh data trước." >&2; exit 1)
 	@echo "Nạp mock dataset $(DATASET)..."
-	@$(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -e \
+	@$(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" -e \
 		"SET GLOBAL local_infile=1; SET FOREIGN_KEY_CHECKS=0;"
 	@for f in $$(sed 's/^[0-9]*\. //;s/\.csv$$//' database/IMPORT_ORDER.txt); do \
 		$(COMPOSE) cp database/$(DATASET)/$$f.csv db:/tmp/seed_$$f.csv; \
-		$(COMPOSE) exec -T db mysql --local-infile=1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" \
+		$(COMPOSE) exec -T db mysql --local-infile=1 -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" \
 			$(MYSQL_DATABASE) -e \
 			"LOAD DATA LOCAL INFILE '/tmp/seed_$$f.csv' INTO TABLE $$f \
 			FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\r\n' \
 			IGNORE 1 LINES;"; \
-		echo "  $$f: $$($(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -N \
+		echo "  $$f: $$($(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" -N \
 			-e "SELECT COUNT(*) FROM $(MYSQL_DATABASE).$$f;") rows"; \
 	done
-	@$(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -e \
+	@$(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" -e \
 		"SET FOREIGN_KEY_CHECKS=1;"
 	@$(COMPOSE) exec -T db sh -c 'rm -f /tmp/seed_*.csv'
 	@echo "Đã nạp xong mock dataset $(DATASET)."
@@ -125,10 +125,10 @@ validate: check-env
 	@echo "Đang chờ database..."
 	@i=1; \
 	while [ $$i -le 30 ]; do \
-		if $(COMPOSE) exec -T db mysqladmin ping -h localhost --silent >/dev/null 2>&1; then break; fi; \
+		if $(COMPOSE) exec -T db mysqladmin ping -h127.0.0.1 --silent >/dev/null 2>&1; then break; fi; \
 		i=$$((i + 1)); sleep 2; \
 	done
-	@actual=$$($(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='$(MYSQL_DATABASE)';"); \
+	@actual=$$($(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='$(MYSQL_DATABASE)';"); \
 	missing=0; \
 	for t in $(TABLES); do \
 		if ! printf '%s\n' "$$actual" | grep -qx "$$t"; then echo "Thiếu bảng: $$t"; missing=1; fi; \
