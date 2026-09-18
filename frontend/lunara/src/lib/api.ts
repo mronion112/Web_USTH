@@ -46,6 +46,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
             const data = await refreshResponse.json();
             setAccessToken(data.data.accessToken);
             setRefreshToken(data.data.refreshToken);
+            window.dispatchEvent(new CustomEvent('auth:token-refreshed'));
             return;
           }
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { getAccessToken, clearTokens } from '@/lib/storage';
+import { getAccessToken, getRefreshToken, clearTokens } from '@/lib/storage';
 import { logoutUser } from '@/services/auth.service';
 import { googleLogin } from '@/lib/api';
 import { RoleCode } from '@/types';
@@ -43,14 +43,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handleTokenRefresh = () => {
+      const token = getAccessToken();
+      if (token) {
+        try {
+          const decoded = jwtDecode<DecodedToken>(token);
+          const email = decoded.email || decoded.sub || '';
+          const role = decoded.role || 'CUSTOMER';
+          setUser({
+            id: decoded.id ?? 0,
+            email,
+            role,
+            displayName: decoded.displayName || decoded.name || email.split('@')[0] || '',
+            roleCode: role as RoleCode,
+            avatarUrl: decoded.avatarUrl,
+          });
+        } catch (e) {
+          console.error('Failed to decode token after refresh', e);
+        }
+      }
+    };
+
+    window.addEventListener('auth:token-refreshed', handleTokenRefresh);
+
     const token = getAccessToken();
+    const refreshToken = getRefreshToken();
+    
     if (token) {
       try {
         const decoded = jwtDecode<DecodedToken>(token);
         // Verify token isn't expired
         const exp = decoded.exp;
         if (exp && exp * 1000 < Date.now()) {
-          throw new Error('Token expired');
+          if (!refreshToken) {
+            throw new Error('Token expired');
+          }
         }
         const email = decoded.email || decoded.sub || '';
         const role = decoded.role || 'CUSTOMER';
@@ -71,6 +98,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
     }
     setLoading(false);
+
+    return () => {
+      window.removeEventListener('auth:token-refreshed', handleTokenRefresh);
+    };
   }, []);
 
   const logout = async () => {
