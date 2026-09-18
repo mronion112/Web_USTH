@@ -6,6 +6,8 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
+let refreshPromise: Promise<void> | null = null;
+
 export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const method = (init.method || 'GET').toUpperCase();
   const headers = new Headers(init.headers);
@@ -17,29 +19,48 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   const response = await fetch(`${API_ORIGIN}${path}`, { ...init, method, headers });
   
   // Auto-refresh logic on 401
-  if (response.status === 401 && retry && !path.includes('/api/v1/auth/refresh')) {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-      try {
-        const refreshResponse = await fetch(`${API_ORIGIN}/api/v1/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken })
-        });
-        
-        if (refreshResponse.ok) {
-          const data = await refreshResponse.json();
-          setAccessToken(data.data.accessToken);
-          setRefreshToken(data.data.refreshToken);
-          return api(path, init, false); // Retry original request
-        }
-      } catch (err) {
-        // Fallthrough to clear tokens
-      }
+  if (response.status === 401 && retry && path !== '/api/v1/auth/refresh') {
+    // If token was already refreshed by another request while this one was in flight, retry immediately
+    const currentToken = getAccessToken();
+    if (token && currentToken && currentToken !== token) {
+      return api(path, init, false);
     }
-    clearTokens();
-    window.location.href = '/auth'; // Force login
-    throw new ApiError(401, 'Session expired');
+
+    if (!refreshPromise) {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        clearTokens();
+        window.location.href = '/auth'; // Force login
+        throw new ApiError(401, 'Session expired');
+      }
+
+      refreshPromise = (async () => {
+        try {
+          const refreshResponse = await fetch(`${API_ORIGIN}/api/v1/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+          });
+
+          if (refreshResponse.ok) {
+            const data = await refreshResponse.json();
+            setAccessToken(data.data.accessToken);
+            setRefreshToken(data.data.refreshToken);
+            return;
+          }
+
+          // Explicit failure (4xx/5xx HTTP response from refresh endpoint)
+          clearTokens();
+          window.location.href = '/auth'; // Force login
+          throw new ApiError(401, 'Session expired');
+        } finally {
+          refreshPromise = null;
+        }
+      })();
+    }
+
+    await refreshPromise;
+    return api(path, init, false); // Retry original request
   }
 
   if (!response.ok) {
