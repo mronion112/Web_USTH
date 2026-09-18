@@ -18,7 +18,7 @@ REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_
 INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
 BASELINE ?= origin/main
 
-.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed schema seed-dataset seed-demo seed-test validate test-backend verify-infra
+.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra
 
 help:
 	@echo "Targets:"
@@ -33,6 +33,7 @@ help:
 	@echo "  logs         Xem log, ví dụ: make logs SERVICE=db"
 	@echo "  seed         Nạp lại schema template database/Web_DataBase_USTH.sql (không kèm data)"
 	@echo "  schema       Alias của seed"
+	@echo "  wait-db      Chờ MySQL nhận TCP (dùng nội bộ trước khi nạp)"
 	@echo "  seed-demo    Nạp mock dataset Production (demo, benchmark)"
 	@echo "  seed-test    Nạp mock dataset Testing (dev, test nhanh)"
 	@echo "  validate     Kiểm tra đủ bảng theo kỳ vọng"
@@ -85,10 +86,23 @@ down-all:
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
 
-seed: check-env
+seed: check-env wait-db
 	$(COMPOSE) up -d --wait db
 	$(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" < database/Web_DataBase_USTH.sql
 	@echo "Đã nạp lại schema template từ database/Web_DataBase_USTH.sql (không kèm data)"
+
+# Chờ mysqld nhận kết nối TCP trong container (healthcheck qua socket
+# có thể xanh trước khi cổng TCP mở).
+wait-db: check-env
+	@echo "Đang chờ MySQL nhận TCP..."
+	@i=1; \
+	while [ $$i -le 30 ]; do \
+		if $(COMPOSE) exec -T db mysqladmin ping -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" --silent >/dev/null 2>&1; then \
+			echo "MySQL đã nhận TCP."; exit 0; \
+		fi; \
+		i=$$((i + 1)); sleep 2; \
+	done; \
+	echo "MySQL không nhận TCP sau 60 giây, xem: $(COMPOSE) logs --tail=40 db" >&2; exit 1
 
 schema: seed
 
@@ -125,7 +139,7 @@ validate: check-env
 	@echo "Đang chờ database..."
 	@i=1; \
 	while [ $$i -le 30 ]; do \
-		if $(COMPOSE) exec -T db mysqladmin ping -h127.0.0.1 --silent >/dev/null 2>&1; then break; fi; \
+		if $(COMPOSE) exec -T db mysqladmin ping -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" --silent >/dev/null 2>&1; then break; fi; \
 		i=$$((i + 1)); sleep 2; \
 	done
 	@actual=$$($(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='$(MYSQL_DATABASE)';"); \
