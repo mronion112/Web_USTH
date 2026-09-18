@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { exchangeAuthCode } from '@/services/auth.service';
 import { setAccessToken, setRefreshToken } from '@/lib/storage';
 
 export const OAuth2RedirectHandler = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const executedRef = useRef(false);
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -15,17 +15,22 @@ export const OAuth2RedirectHandler = () => {
       return;
     }
 
+    if (executedRef.current) {
+      return;
+    }
+    executedRef.current = true;
+
     exchangeAuthCode(code)
       .then((tokens) => {
         setAccessToken(tokens.accessToken);
         setRefreshToken(tokens.refreshToken);
-        navigate('/admin/dashboard', { replace: true });
-        window.location.reload(); // Force context reload
+        window.location.href = '/admin/dashboard';
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('OAuth2 code exchange failed:', err);
         setError('Login failed. Please try again.');
       });
-  }, [searchParams, navigate]);
+  }, [searchParams]);
 
   if (error) {
     return <div className="p-8 text-center text-red-500">{error}</div>;
