@@ -34,6 +34,9 @@ public class RagIndexService {
     private final ChromaProperties chromaProperties;
 
     public List<SearchResult> search(String query, int topK) {
+        if (!chromaProperties.isEnabled()) {
+            return List.of();
+        }
         double[] queryEmbedding = geminiClient.embedQuery(query);
         return chromaClient.query(queryEmbedding, topK).stream()
                 .map(result -> new SearchResult(
@@ -44,6 +47,10 @@ public class RagIndexService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void indexOnStartup() {
+        if (!chromaProperties.isEnabled()) {
+            log.info("Chroma đang tắt; bỏ qua startup indexing.");
+            return;
+        }
         if (!chromaProperties.isStartupIndexing()) {
             log.info("Chroma startup indexing đang tắt.");
             return;

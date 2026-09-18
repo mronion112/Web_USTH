@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.chatbot.chroma")
 public class ChromaProperties {
 
+    private boolean enabled = false;
     private String url = "http://localhost:8000";
     private String tenant = "default_tenant";
     private String database = "default_database";

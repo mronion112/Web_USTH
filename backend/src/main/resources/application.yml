@@ -55,10 +55,11 @@ app:
     chunk-overlap: ${CHATBOT_CHUNK_OVERLAP:250}
     default-top-k: ${CHATBOT_DEFAULT_TOP_K:5}
     chroma:
+      enabled: ${CHROMA_ENABLED:false}
       url: ${CHROMA_URL:http://localhost:8000}
       tenant: ${CHROMA_TENANT:default_tenant}
       database: ${CHROMA_DATABASE:default_database}
       collection: ${CHROMA_COLLECTION:lunara_spa_knowledge}
       api-key: ${CHROMA_API_KEY:}
-      startup-indexing: ${CHROMA_STARTUP_INDEXING:true}
+      startup-indexing: ${CHROMA_STARTUP_INDEXING:false}
       upsert-batch-size: ${CHROMA_UPSERT_BATCH_SIZE:100}
