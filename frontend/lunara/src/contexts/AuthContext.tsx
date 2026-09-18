@@ -14,6 +14,18 @@ export interface UserPayload {
   avatarUrl?: string;
 }
 
+interface DecodedToken {
+  id?: number;
+  email?: string;
+  role?: string;
+  displayName?: string;
+  roleCode?: RoleCode;
+  avatarUrl?: string;
+  sub?: string;
+  name?: string;
+  exp?: number;
+}
+
 interface AuthContextType {
   user: UserPayload | null;
   loading: boolean;
@@ -24,15 +36,7 @@ interface AuthContextType {
   hasPermission: (allowedRoles: RoleCode[]) => boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  logout: () => {},
-  role: 'CUSTOMER',
-  login: () => {},
-  isAuthenticated: false,
-  hasPermission: () => false,
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserPayload | null>(null);
@@ -42,21 +46,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const token = getAccessToken();
     if (token) {
       try {
-        const decoded = jwtDecode<UserPayload & { sub?: string; name?: string; exp?: number }>(token);
+        const decoded = jwtDecode<DecodedToken>(token);
         // Verify token isn't expired
-        const exp = (decoded as any).exp;
+        const exp = decoded.exp;
         if (exp && exp * 1000 < Date.now()) {
           throw new Error('Token expired');
         }
-        const email = decoded.email || (decoded as any).sub || '';
+        const email = decoded.email || decoded.sub || '';
         const role = decoded.role || 'CUSTOMER';
         const userPayload: UserPayload = {
           id: decoded.id ?? 0,
           email,
           role,
-          displayName: decoded.displayName || (decoded as any).name || email.split('@')[0] || '',
+          displayName: decoded.displayName || decoded.name || email.split('@')[0] || '',
           roleCode: role as RoleCode,
-          avatarUrl: (decoded as any).avatarUrl,
+          avatarUrl: decoded.avatarUrl,
         };
         setUser(userPayload);
       } catch {
@@ -72,8 +76,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       await logoutUser();
-    } catch {
-      /* ignore */
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
     clearTokens();
     setUser(null);
@@ -99,4 +103,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
+};
