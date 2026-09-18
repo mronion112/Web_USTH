@@ -22,10 +22,10 @@ BASELINE ?= origin/main
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động MySQL + Redis + Chroma"
+	@echo "  up           Khởi động MySQL + Redis"
 	@echo "  chroma       Khởi động và kiểm tra Chroma DB"
 	@echo "  check-chroma Kiểm tra Chroma API heartbeat"
-	@echo "  up-app       Khởi động full stack (database, redis, chroma, backend, frontend)"
+	@echo "  up-app       Khởi động full stack (MySQL, Redis, Chroma, backend, frontend)"
 	@echo "  test         Khởi động hạ tầng + nạp dataset Testing + chạy backend tests"
 	@echo "  demo         Khởi động hạ tầng + nạp dataset Production + chạy full stack"
 	@echo "  down         Dừng stack local (giữ data trong volume)"
@@ -48,8 +48,7 @@ check-env:
 	if [ -n "$$missing" ]; then echo "Thiếu biến trong $(ENV_FILE):$$missing" >&2; exit 1; fi
 
 up: check-env
-	$(COMPOSE) up -d db redis chroma
-	$(MAKE) --no-print-directory check-chroma
+	$(COMPOSE) up -d --wait db redis
 
 chroma:
 	$(COMPOSE) up -d chroma
@@ -69,25 +68,25 @@ check-chroma:
 	exit 1
 
 up-app: check-env
-	$(COMPOSE) --profile app up -d --build
+	CHROMA_ENABLED=true CHROMA_STARTUP_INDEXING=true $(COMPOSE) --profile app --profile chroma up -d --build
 
 test: up seed-test test-backend
-	@echo "Đã hoàn tất workflow test với MySQL + Redis + Chroma."
+	@echo "Đã hoàn tất workflow test với MySQL + Redis (không cần Chroma)."
 
 demo: up seed-demo up-app
 	@echo "Đã khởi động demo đầy đủ với dataset Production."
 
 down:
-	$(COMPOSE) --profile app down
+	$(COMPOSE) --profile app --profile chroma down
 
 down-all:
-	$(COMPOSE) --profile app down -v
+	$(COMPOSE) --profile app --profile chroma down -v
 
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
 
 seed: check-env
-	$(COMPOSE) up -d db
+	$(COMPOSE) up -d --wait db
 	$(COMPOSE) exec -T db mysql -uroot -p"$(MYSQL_ROOT_PASSWORD)" < database/Web_DataBase_USTH.sql
 	@echo "Đã nạp lại schema template từ database/Web_DataBase_USTH.sql (không kèm data)"
 

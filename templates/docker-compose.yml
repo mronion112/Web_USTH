@@ -11,10 +11,10 @@
 #   cp templates/.env.example templates/.env
 #   docker compose -f templates/docker-compose.yml up
 #
-# Mặc định chỉ khởi động DB template, Redis và Chroma, chưa có data.
+# Mặc định chỉ khởi động DB template và Redis, chưa có data.
 # VITE_API_URL chốt lúc build frontend, đổi giá trị thì build lại.
 # Chạy full stack:
-#   docker compose -f templates/docker-compose.yml --profile app up --build
+#   docker compose -f templates/docker-compose.yml --profile app --profile chroma up --build
 
 name: lunara-spa
 
@@ -51,6 +51,7 @@ services:
     restart: unless-stopped
 
   chroma:
+    profiles: ["chroma"]
     image: chromadb/chroma:latest
     ports:
       - "${CHROMA_PORT:-8000}:8000"
@@ -60,7 +61,7 @@ services:
     volumes:
       - chroma_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      test: ["CMD-SHELL", "grep -q ':1F40 ' /proc/net/tcp /proc/net/tcp6"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -91,6 +92,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:?thiếu trong .env}
       CHATBOT_DOCS_PATH: /app/docs
       CHROMA_URL: http://chroma:8000
+      CHROMA_ENABLED: ${CHROMA_ENABLED:-false}
+      CHROMA_STARTUP_INDEXING: ${CHROMA_STARTUP_INDEXING:-false}
     depends_on:
       db:
         condition: service_healthy
