@@ -1,48 +1,102 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { Account, RoleCode } from '@/types';
-import { api, googleLogin } from '@/lib/api';
+import { jwtDecode } from 'jwt-decode';
+import { getAccessToken, clearTokens } from '@/lib/storage';
+import { logoutUser } from '@/services/auth.service';
+import { googleLogin } from '@/lib/api';
+import { RoleCode } from '@/types';
+
+export interface UserPayload {
+  id: number;
+  email: string;
+  role: string;
+  displayName: string;
+  roleCode?: RoleCode;
+  avatarUrl?: string;
+}
 
 interface AuthContextType {
-  user: Account | null;
-  role: RoleCode;
-  isAuthenticated: boolean;
+  user: UserPayload | null;
   loading: boolean;
+  logout: () => void | Promise<void>;
+  role: RoleCode;
   login: () => void;
-  logout: () => Promise<void>;
+  isAuthenticated: boolean;
   hasPermission: (allowedRoles: RoleCode[]) => boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  logout: () => {},
+  role: 'CUSTOMER',
+  login: () => {},
+  isAuthenticated: false,
+  hasPermission: () => false,
+});
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<Account | null>(null);
+  const [user, setUser] = useState<UserPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<Account>('/api/v1/auth/me').then(setUser).catch(() => setUser(null)).finally(() => setLoading(false));
+    const token = getAccessToken();
+    if (token) {
+      try {
+        const decoded = jwtDecode<UserPayload & { sub?: string; name?: string; exp?: number }>(token);
+        // Verify token isn't expired
+        const exp = (decoded as any).exp;
+        if (exp && exp * 1000 < Date.now()) {
+          throw new Error('Token expired');
+        }
+        const email = decoded.email || (decoded as any).sub || '';
+        const role = decoded.role || 'CUSTOMER';
+        const userPayload: UserPayload = {
+          id: decoded.id ?? 0,
+          email,
+          role,
+          displayName: decoded.displayName || (decoded as any).name || email.split('@')[0] || '',
+          roleCode: role as RoleCode,
+          avatarUrl: (decoded as any).avatarUrl,
+        };
+        setUser(userPayload);
+      } catch {
+        clearTokens();
+        setUser(null);
+      }
+    } else {
+      setUser(null);
+    }
+    setLoading(false);
   }, []);
 
   const logout = async () => {
-    try { await api('/api/v1/auth/logout', { method: 'POST' }); } finally { setUser(null); }
+    try {
+      await logoutUser();
+    } catch {
+      /* ignore */
+    }
+    clearTokens();
+    setUser(null);
+    window.location.href = '/auth'; // Redirect to login
   };
 
+  const role = user?.roleCode || (user?.role as RoleCode) || 'CUSTOMER';
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      role: user?.roleCode || 'CUSTOMER',
-      isAuthenticated: !!user,
-      loading,
-      login: googleLogin,
-      logout,
-      hasPermission: (allowedRoles) => !!user && allowedRoles.includes(user.roleCode),
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        logout,
+        role,
+        login: googleLogin,
+        isAuthenticated: !!user,
+        hasPermission: (allowedRoles: RoleCode[]) => !!user && allowedRoles.includes(role),
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
-  return ctx;
-};
+export const useAuth = () => useContext(AuthContext);
