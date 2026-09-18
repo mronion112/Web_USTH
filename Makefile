@@ -69,7 +69,7 @@ check-chroma:
 	exit 1
 
 up-app: check-env
-	CHROMA_ENABLED=true CHROMA_STARTUP_INDEXING=true $(COMPOSE) --profile app --profile chroma up -d --build
+	CHROMA_ENABLED=true CHROMA_STARTUP_INDEXING=true $(COMPOSE) --profile app up -d --build
 
 test: up seed-test test-backend
 	@echo "Đã hoàn tất workflow test với MySQL + Redis (không cần Chroma)."
@@ -78,10 +78,10 @@ demo: up seed-demo up-app
 	@echo "Đã khởi động demo đầy đủ với dataset Production."
 
 down:
-	$(COMPOSE) --profile app --profile chroma down
+	$(COMPOSE) --profile app down
 
 down-all:
-	$(COMPOSE) --profile app --profile chroma down -v
+	$(COMPOSE) --profile app down -v
 
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
