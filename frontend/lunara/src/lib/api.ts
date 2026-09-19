@@ -1,4 +1,5 @@
 import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from './storage';
+import { toast } from 'sonner';
 
 const API_ORIGIN = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -66,7 +67,18 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
 
   if (!response.ok) {
     const details = await response.json().catch(() => ({}));
-    throw new ApiError(response.status, details.message || `HTTP ${response.status}`);
+    const errorMessage =
+      details.message || details.error || `HTTP ${response.status} Error`;
+
+    // Developer log
+    console.error(`❌ [API] Request failed (${response.status}):`, errorMessage);
+
+    // User notification (skip toast for 401s since they are handled via redirects/refresh silently)
+    if (response.status !== 401) {
+      toast.error(errorMessage);
+    }
+
+    throw new ApiError(response.status, errorMessage);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
