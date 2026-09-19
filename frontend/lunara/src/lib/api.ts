@@ -68,7 +68,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   if (!response.ok) {
     const details = await response.json().catch(() => ({}));
     const errorMessage =
-      details.message || details.error || `HTTP ${response.status} Error`;
+      details?.message || details?.error || `HTTP ${response.status} Error`;
 
     // Developer log
     console.error(`❌ [API] Request failed (${response.status}):`, errorMessage);

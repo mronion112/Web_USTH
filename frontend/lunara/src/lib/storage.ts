@@ -14,7 +14,10 @@ export const setAccessToken = (token: string): void => {
   try {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
   } catch (error) {
-    console.warn('Failed to save to storage (QuotaExceeded or SecurityError)', error);
+    console.warn(
+      'Failed to save to storage (QuotaExceeded or SecurityError)',
+      error,
+    );
   }
 };
 
@@ -31,7 +34,10 @@ export const setRefreshToken = (token: string): void => {
   try {
     localStorage.setItem(REFRESH_TOKEN_KEY, token);
   } catch (error) {
-    console.warn('Failed to save to storage (QuotaExceeded or SecurityError)', error);
+    console.warn(
+      'Failed to save to storage (QuotaExceeded or SecurityError)',
+      error,
+    );
   }
 };
 
