@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { Toaster } from 'sonner';
 
 // Customer Flow
 import { LandingPage } from '@/pages/LandingPage';
@@ -31,6 +32,7 @@ import { OAuth2RedirectPage } from '@/pages/OAuth2RedirectPage';
 function App() {
   return (
     <AuthProvider>
+      <Toaster richColors position="top-right" />
       <TooltipProvider>
         <BrowserRouter>
           <Routes>
