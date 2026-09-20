@@ -1,27 +1,43 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import React, { useCallback, useState } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Play, CheckCircle2, User, Sparkles, Calendar } from 'lucide-react';
-import { api, ApiBooking, events } from '@/lib/api';
+import { Play, CheckCircle2, User, Calendar } from 'lucide-react';
+import { staffTasksApi, ApiTask } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRefresh } from '@/lib/use-refresh';
 
 export const MyWorkPage: React.FC = () => {
   const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'IN_SERVICE' | 'CHECKED_IN' | 'COMPLETED'>('ALL');
-  const [tasks, setTasks] = useState<ApiBooking[]>([]);
+  const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [error, setError] = useState('');
-  const reload = useCallback(() => {
+
+  const reload = useCallback(async (signal?: AbortSignal) => {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
     const value = (type: string) => parts.find((part) => part.type === type)?.value || '';
     const date = `${value('year')}-${value('month')}-${value('day')}`;
-    void api<ApiBooking[]>(`/api/v1/admin/bookings?date=${date}`).then(setTasks).catch((e) => setError(e.message));
+    await staffTasksApi.getTasks(date, signal).then(setTasks).catch((e) => {
+      if (e?.name !== 'AbortError') setError(e.message);
+    });
   }, []);
-  useEffect(() => { reload(); const source = events(); source.addEventListener('booking.events', reload); const poll = window.setInterval(reload, 10000); return () => { source.close(); window.clearInterval(poll); }; }, [reload]);
-  const transition = async (task: ApiBooking, action: 'start' | 'complete') => {
-    try { await api(`/api/v1/bookings/${task.bookingCode}/${action}`, { method: 'POST' }); setError(''); reload(); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Không cập nhật được dịch vụ'); }
+
+  useRefresh('task', async (signal) => reload(signal), Boolean(user));
+
+  const transition = async (task: ApiTask, action: 'start' | 'complete') => {
+    try {
+      if (action === 'start') {
+        await staffTasksApi.start(task.bookingId);
+      } else {
+        await staffTasksApi.complete(task.bookingId);
+      }
+      setError('');
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không cập nhật được dịch vụ');
+    }
   };
+
   const time = (value: string) => new Date(value).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' });
 
   const filteredTasks = tasks.filter((t) => {
@@ -76,73 +92,81 @@ export const MyWorkPage: React.FC = () => {
 
       {/* Tasks Queue Cards */}
       <div className="space-y-4">
-        {filteredTasks.map((task) => (
-          <Card key={task.id} className="p-6 border border-[#E2E8E3] shadow-luxury space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8E3] pb-3">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-sm text-[#1E3B2B] bg-[#E8F5E9] px-2.5 py-1 rounded-lg">
-                  {time(task.bookingStart)} — {time(task.bookingEnd)}
-                </span>
-                <span className="text-xs text-[#8EAA97]">({task.totalDurationMinutes} phút)</span>
-              </div>
+        {filteredTasks.length === 0 && (
+          <div className="rounded-2xl bg-white border border-[#E2E8E3] p-12 text-center text-[#6B726C] text-sm">
+            Không có lịch phân công cho trạng thái này.
+          </div>
+        )}
+        {filteredTasks.map((task) => {
+          const totalDuration = (task.services || []).reduce((sum, s) => sum + s.durationMinutes, 0);
+          return (
+            <Card key={task.bookingId} className="p-6 border border-[#E2E8E3] shadow-luxury space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8E3] pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-sm text-[#1E3B2B] bg-[#E8F5E9] px-2.5 py-1 rounded-lg">
+                    {time(task.bookingStart)} — {time(task.bookingEnd)}
+                  </span>
+                  {totalDuration > 0 && <span className="text-xs text-[#8EAA97]">({totalDuration} phút)</span>}
+                </div>
 
-              <Badge
-                variant={
-                  task.status === 'IN_SERVICE'
-                    ? 'default'
+                <Badge
+                  variant={
+                    task.status === 'IN_SERVICE'
+                      ? 'default'
+                      : task.status === 'CHECKED_IN'
+                      ? 'secondary'
+                      : task.status === 'COMPLETED'
+                      ? 'success'
+                      : 'outline'
+                  }
+                >
+                  {task.status === 'IN_SERVICE'
+                    ? '● ĐANG THỰC HIỆN LIỆU TRÌNH'
                     : task.status === 'CHECKED_IN'
-                    ? 'secondary'
+                    ? '● KHÁCH ĐÃ CHECK-IN'
                     : task.status === 'COMPLETED'
-                    ? 'success'
-                    : 'outline'
-                }
-              >
-                {task.status === 'IN_SERVICE'
-                  ? '● ĐANG THỰC HIỆN LIỆU TRÌNH'
-                  : task.status === 'CHECKED_IN'
-                  ? '● KHÁCH ĐÃ CHECK-IN'
-                  : task.status === 'COMPLETED'
-                  ? '✓ ĐÃ HOÀN THÀNH'
-                  : '○ CHƯA ĐẾN'}
-              </Badge>
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="font-display font-semibold text-xl text-[#14271C]">
-                {task.items.map((item) => item.serviceNameSnapshot).join(', ')}
-              </h3>
-              <div className="flex items-center gap-4 text-xs text-[#526056]">
-                <span className="flex items-center gap-1 font-medium">
-                  <User className="h-3.5 w-3.5 text-[#8EAA97]" /> Khách hàng: {task.customerNameSnapshot}
-                </span>
-                <span>ĐT: {task.customerPhoneSnapshot || '—'}</span>
+                    ? '✓ ĐÃ HOÀN THÀNH'
+                    : '○ CHƯA ĐẾN'}
+                </Badge>
               </div>
-            </div>
 
-            {/* Actions for Therapist */}
-            <div className="pt-2 flex items-center justify-end gap-3">
-              {task.status === 'CHECKED_IN' && (
-                <Button
-                  onClick={() => void transition(task, 'start')}
-                  className="rounded-xl h-11 px-6 bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold shadow-sm"
-                >
-                  <Play className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
-                  Bắt đầu dịch vụ
-                </Button>
-              )}
+              <div className="space-y-1">
+                <h3 className="font-display font-semibold text-xl text-[#14271C]">
+                  {(task.services || []).map((s) => s.name).join(', ') || 'Dịch vụ spa'}
+                </h3>
+                <div className="flex items-center gap-4 text-xs text-[#526056]">
+                  <span className="flex items-center gap-1 font-medium">
+                    <User className="h-3.5 w-3.5 text-[#8EAA97]" /> Khách hàng: {task.customerName}
+                  </span>
+                  <span className="font-mono text-[#8EAA97]">#{task.bookingCode}</span>
+                </div>
+              </div>
 
-              {task.status === 'IN_SERVICE' && (
-                <Button
-                  onClick={() => void transition(task, 'complete')}
-                  className="rounded-xl h-11 px-6 bg-[#2E7D32] text-white hover:bg-[#1b5e20] text-xs font-semibold shadow-sm"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                  Xác nhận hoàn thành dịch vụ
-                </Button>
-              )}
-            </div>
-          </Card>
-        ))}
+              {/* Actions for Therapist */}
+              <div className="pt-2 flex items-center justify-end gap-3">
+                {task.status === 'CHECKED_IN' && (
+                  <Button
+                    onClick={() => void transition(task, 'start')}
+                    className="rounded-xl h-11 px-6 bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold shadow-sm"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
+                    Bắt đầu dịch vụ
+                  </Button>
+                )}
+
+                {task.status === 'IN_SERVICE' && (
+                  <Button
+                    onClick={() => void transition(task, 'complete')}
+                    className="rounded-xl h-11 px-6 bg-[#2E7D32] text-white hover:bg-[#1b5e20] text-xs font-semibold shadow-sm"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                    Xác nhận hoàn thành dịch vụ
+                  </Button>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

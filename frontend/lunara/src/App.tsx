@@ -1,38 +1,55 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { canAccessAdminRoute, ROLE_HOME } from '@/lib/access-control';
 
 // Customer Flow
-import { LandingPage } from '@/pages/LandingPage';
-import { AuthPage } from '@/pages/AuthPage';
-import { BookingPage } from '@/pages/BookingPage';
-import { CheckoutPage } from '@/pages/CheckoutPage';
-import { TicketPage } from '@/pages/TicketPage';
+const page = <T extends object>(loader: () => Promise<T>, name: keyof T) =>
+  lazy(async () => ({ default: (await loader())[name] as ComponentType }));
+const LandingPage = page(() => import('@/pages/LandingPage'), 'LandingPage');
+const AuthPage = page(() => import('@/pages/AuthPage'), 'AuthPage');
+const OAuth2RedirectPage = page(() => import('@/pages/OAuth2RedirectPage'), 'OAuth2RedirectPage');
+const BookingPage = page(() => import('@/pages/BookingPage'), 'BookingPage');
+const CheckoutPage = page(() => import('@/pages/CheckoutPage'), 'CheckoutPage');
+const TicketPage = page(() => import('@/pages/TicketPage'), 'TicketPage');
+const AdminLoginPage = page(() => import('@/pages/admin/AdminLoginPage'), 'AdminLoginPage');
+const AdminLayout = page(() => import('@/components/layout/AdminLayout'), 'AdminLayout');
+const DashboardPage = page(() => import('@/pages/admin/DashboardPage'), 'DashboardPage');
+const LivePage = page(() => import('@/pages/admin/LivePage'), 'LivePage');
+const BookingsPage = page(() => import('@/pages/admin/BookingsPage'), 'BookingsPage');
+const CalendarPage = page(() => import('@/pages/admin/CalendarPage'), 'CalendarPage');
+const CustomersPage = page(() => import('@/pages/admin/CustomersPage'), 'CustomersPage');
+const StaffPage = page(() => import('@/pages/admin/StaffPage'), 'StaffPage');
+const ServicesPage = page(() => import('@/pages/admin/ServicesPage'), 'ServicesPage');
+const PaymentsPage = page(() => import('@/pages/admin/PaymentsPage'), 'PaymentsPage');
+const UsersRolePage = page(() => import('@/pages/admin/UsersRolePage'), 'UsersRolePage');
+const ReportsPage = page(() => import('@/pages/admin/ReportsPage'), 'ReportsPage');
+const MyWorkPage = page(() => import('@/pages/staff/MyWorkPage'), 'MyWorkPage');
+const MyCalendarPage = page(() => import('@/pages/staff/MyCalendarPage'), 'MyCalendarPage');
 
-// Admin Flow
-import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
-import { AdminLayout } from '@/components/layout/AdminLayout';
-import { DashboardPage } from '@/pages/admin/DashboardPage';
-import { LivePage } from '@/pages/admin/LivePage';
-import { BookingsPage } from '@/pages/admin/BookingsPage';
-import { CalendarPage } from '@/pages/admin/CalendarPage';
-import { CustomersPage } from '@/pages/admin/CustomersPage';
-import { StaffPage } from '@/pages/admin/StaffPage';
-import { ServicesPage } from '@/pages/admin/ServicesPage';
-import { PaymentsPage } from '@/pages/admin/PaymentsPage';
-import { UsersRolePage } from '@/pages/admin/UsersRolePage';
-import { ReportsPage } from '@/pages/admin/ReportsPage';
+function RequireAdminRoute({ path, children }: { path: string; children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="p-8">Đang xác thực…</div>;
+  if (!user) return <Navigate to="/admin/login" replace />;
+  if (!canAccessAdminRoute(user.roleCode, path)) return <Navigate to={ROLE_HOME[user.roleCode]} replace />;
+  return children;
+}
 
-// Staff Flow
-import { MyWorkPage } from '@/pages/staff/MyWorkPage';
-import { MyCalendarPage } from '@/pages/staff/MyCalendarPage';
-import { OAuth2RedirectPage } from '@/pages/OAuth2RedirectPage';
+function RoleHomeRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="p-8">Đang xác thực…</div>;
+  return <Navigate to={user ? ROLE_HOME[user.roleCode] : '/admin/login'} replace />;
+}
 
 function App() {
   return (
     <AuthProvider>
       <TooltipProvider>
         <BrowserRouter>
+          <Suspense fallback={<div className="p-8">Đang tải…</div>}>
           <Routes>
             {/* Customer Routes */}
             <Route path="/" element={<LandingPage />} />
@@ -47,17 +64,17 @@ function App() {
 
             {/* Admin Management Workspace */}
             <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="/admin/dashboard" replace />} />
-              <Route path="dashboard" element={<DashboardPage />} />
-              <Route path="live" element={<LivePage />} />
-              <Route path="booking" element={<BookingsPage />} />
-              <Route path="calendar" element={<CalendarPage />} />
-              <Route path="customers" element={<CustomersPage />} />
-              <Route path="staff" element={<StaffPage />} />
-              <Route path="services" element={<ServicesPage />} />
-              <Route path="payments" element={<PaymentsPage />} />
-              <Route path="user-role" element={<UsersRolePage />} />
-              <Route path="reports" element={<ReportsPage />} />
+              <Route index element={<RoleHomeRedirect />} />
+              <Route path="dashboard" element={<RequireAdminRoute path="/admin/dashboard"><DashboardPage /></RequireAdminRoute>} />
+              <Route path="live" element={<RequireAdminRoute path="/admin/live"><LivePage /></RequireAdminRoute>} />
+              <Route path="booking" element={<RequireAdminRoute path="/admin/booking"><BookingsPage /></RequireAdminRoute>} />
+              <Route path="calendar" element={<RequireAdminRoute path="/admin/calendar"><CalendarPage /></RequireAdminRoute>} />
+              <Route path="customers" element={<RequireAdminRoute path="/admin/customers"><CustomersPage /></RequireAdminRoute>} />
+              <Route path="staff" element={<RequireAdminRoute path="/admin/staff"><StaffPage /></RequireAdminRoute>} />
+              <Route path="services" element={<RequireAdminRoute path="/admin/services"><ServicesPage /></RequireAdminRoute>} />
+              <Route path="payments" element={<RequireAdminRoute path="/admin/payments"><PaymentsPage /></RequireAdminRoute>} />
+              <Route path="user-role" element={<RequireAdminRoute path="/admin/user-role"><UsersRolePage /></RequireAdminRoute>} />
+              <Route path="reports" element={<RequireAdminRoute path="/admin/reports"><ReportsPage /></RequireAdminRoute>} />
             </Route>
 
             {/* Staff Portal */}
@@ -70,6 +87,7 @@ function App() {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

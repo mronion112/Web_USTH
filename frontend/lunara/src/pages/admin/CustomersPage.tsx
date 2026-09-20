@@ -1,91 +1,123 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { MOCK_CUSTOMERS, CustomerDetail } from '@/data/mock-customers';
-import { Search, Plus, Mail, Phone, ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { Search, Plus, Mail, Phone, ChevronDown, ChevronUp, Save, Sparkles, Heart } from 'lucide-react';
+import { customersApi, ApiCustomer } from '@/lib/api';
 
 export const CustomersPage: React.FC = () => {
-  const [customers, setCustomers] = useState<CustomerDetail[]>(MOCK_CUSTOMERS);
+  const [customers, setCustomers] = useState<ApiCustomer[]>([]);
   const [search, setSearch] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>('cus-1');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [loading, setLoading] = useState(true);
 
   // Form state for new customer
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [formPrefs, setFormPrefs] = useState('');
 
-  // Local state for editing internal notes of expanded customer
-  const [editingNotes, setEditingNotes] = useState<{ [id: string]: string }>({});
+  // Local state for editing internal notes
+  const [editingNotes, setEditingNotes] = useState<{ [id: number]: string }>({});
+  const [editingPrefs, setEditingPrefs] = useState<{ [id: number]: string }>({});
 
-  const handleNoteChange = (customerId: string, value: string) => {
+  const reloadCustomers = useCallback(async () => {
+    try {
+      const data = await customersApi.getAll(search.trim() || undefined, 0, 100);
+      if (Array.isArray(data)) {
+        setCustomers(data);
+        if (data.length > 0 && expandedId === null) {
+          setExpandedId(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load customers:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    reloadCustomers();
+  }, [reloadCustomers]);
+
+  const handleNoteChange = (customerId: number, value: string) => {
     setEditingNotes((prev) => ({ ...prev, [customerId]: value }));
   };
 
-  const handleSaveNote = (customerId: string) => {
-    const newNote = editingNotes[customerId];
-    if (newNote === undefined) return;
-
-    setCustomers((prev) =>
-      prev.map((c) => (c.id === customerId ? { ...c, internalNotes: newNote } : c))
-    );
-
-    setSuccessMsg('Đã cập nhật ghi chú nội bộ cho khách hàng');
-    setTimeout(() => setSuccessMsg(''), 3500);
+  const handlePrefsChange = (customerId: number, value: string) => {
+    setEditingPrefs((prev) => ({ ...prev, [customerId]: value }));
   };
 
-  const handleCreateCustomer = (e: React.FormEvent) => {
+  const handleSaveNote = async (customerId: number) => {
+    const newNote = editingNotes[customerId];
+    const newPref = editingPrefs[customerId];
+
+    try {
+      await customersApi.updateNotes(customerId, newNote, newPref);
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c.id === customerId
+            ? {
+                ...c,
+                internalNotes: newNote !== undefined ? newNote : c.internalNotes,
+                preferences: newPref !== undefined ? newPref : c.preferences,
+              }
+            : c
+        )
+      );
+      setSuccessMsg('Đã lưu ghi chú và sở thích khách hàng vào hệ thống');
+      setTimeout(() => setSuccessMsg(''), 3500);
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi lưu ghi chú');
+    }
+  };
+
+  const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formPhone.trim()) return;
 
-    const newCus: CustomerDetail = {
-      id: `cus-${Date.now()}`,
-      name: formName,
-      phone: formPhone,
-      email: formEmail || `${formPhone}@client.lunara.vn`,
-      bookingsCount: 1,
-      completedCount: 0,
-      totalSpent: 0,
-      lastVisit: 'Khách hàng mới',
-      preferences: '',
-      internalNotes: formNotes || 'Khách đăng ký mới qua quầy tiếp đón.',
-    };
+    try {
+      await customersApi.create({
+        name: formName.trim(),
+        phone: formPhone.trim(),
+        email: formEmail.trim() || undefined,
+        internalNotes: formNotes.trim() || undefined,
+        preferences: formPrefs.trim() || undefined,
+      });
 
-    setCustomers([newCus, ...customers]);
-    setAddModalOpen(false);
-    setSuccessMsg(`Đã thêm mới thành công hồ sơ khách hàng: ${formName}`);
-    setTimeout(() => setSuccessMsg(''), 4000);
+      await reloadCustomers();
+      setAddModalOpen(false);
+      setSuccessMsg(`Đã tạo hồ sơ khách hàng mới: ${formName}`);
+      setTimeout(() => setSuccessMsg(''), 3500);
 
-    // Reset Form
-    setFormName('');
-    setFormPhone('');
-    setFormEmail('');
-    setFormNotes('');
+      // Reset form
+      setFormName('');
+      setFormPhone('');
+      setFormEmail('');
+      setFormNotes('');
+      setFormPrefs('');
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi tạo khách hàng');
+    }
   };
-
-  const filtered = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.includes(search) ||
-      c.email.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
     <div className="space-y-6 font-body max-w-7xl mx-auto">
-      {/* Top Header */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold text-[#14271C]">
-            Quản lý khách hàng
+            Hồ sơ khách hàng
           </h1>
           <p className="text-xs text-[#6B726C] mt-1">
-            Danh bạ thành viên & lịch sử chăm sóc tại Lunara ({customers.length} khách hàng)
+            Dữ liệu thành viên, lịch sử đặt chỗ và ghi chú chăm sóc cá nhân hóa ({customers.length} khách)
           </p>
         </div>
 
@@ -94,7 +126,7 @@ export const CustomersPage: React.FC = () => {
           className="rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs h-11 px-5 shadow-luxury cursor-pointer"
         >
           <Plus className="h-4 w-4 mr-1.5 text-[#C5A880]" />
-          Thêm khách hàng mới
+          Thêm khách hàng
         </Button>
       </div>
 
@@ -104,206 +136,233 @@ export const CustomersPage: React.FC = () => {
         </div>
       )}
 
-      {/* Search Input */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8EAA97]" />
+      {/* Search Bar */}
+      <div className="relative w-full max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8EAA97]" />
         <Input
+          placeholder="Tìm theo tên, số điện thoại hoặc email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm tên khách hàng, số điện thoại hoặc email..."
-          className="pl-10 text-xs h-10 bg-white"
+          className="pl-9 h-10 text-xs rounded-xl bg-white border-[#E2E8E3]"
         />
       </div>
 
-      {/* Customers List with Expandable Rows */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-[#F8F9F5] border-b border-[#E2E8E3] text-[#6B726C] uppercase font-semibold">
-              <tr>
-                <th className="py-3.5 px-6">Khách hàng</th>
-                <th className="py-3.5 px-6">Liên hệ</th>
-                <th className="py-3.5 px-6 text-center">Số lần đặt</th>
-                <th className="py-3.5 px-6 text-right">Tổng chi tiêu</th>
-                <th className="py-3.5 px-6">Lần ghé gần nhất</th>
-                <th className="py-3.5 px-6 text-right">Chi tiết</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E2E8E3]">
-              {filtered.map((customer) => {
-                const isExpanded = expandedId === customer.id;
-                const currentNote =
-                  editingNotes[customer.id] !== undefined
-                    ? editingNotes[customer.id]
-                    : customer.internalNotes;
+      {/* Customer Accordion List */}
+      {loading ? (
+        <div className="text-center py-16 text-xs text-[#8EAA97]">Đang tải hồ sơ khách hàng từ database...</div>
+      ) : customers.length === 0 ? (
+        <div className="text-center py-16 text-xs text-[#8EAA97]">Không tìm thấy khách hàng phù hợp</div>
+      ) : (
+        <div className="space-y-3">
+          {customers.map((cus) => {
+            const isExpanded = expandedId === cus.id;
+            const currentNote =
+              editingNotes[cus.id] !== undefined ? editingNotes[cus.id] : cus.internalNotes || '';
+            const currentPref =
+              editingPrefs[cus.id] !== undefined ? editingPrefs[cus.id] : cus.preferences || '';
 
-                return (
-                  <React.Fragment key={customer.id}>
-                    <tr
-                      onClick={() => setExpandedId(isExpanded ? null : customer.id)}
-                      className="hover:bg-[#F8F9F5]/80 transition-colors cursor-pointer"
-                    >
-                      <td className="py-4 px-6 font-semibold text-[#14271C]">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-[#E8F5E9] text-[#1E3B2B] font-bold flex items-center justify-center">
-                            {customer.name.charAt(0)}
-                          </div>
-                          <span>{customer.name}</span>
+            return (
+              <Card
+                key={cus.id}
+                className="overflow-hidden border border-[#E2E8E3] shadow-luxury transition-all"
+              >
+                {/* Accordion Summary Row */}
+                <div
+                  onClick={() => setExpandedId(isExpanded ? null : cus.id)}
+                  className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-[#FAFBF9] transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-11 w-11 rounded-2xl bg-[#E8F5E9] text-[#1E3B2B] flex items-center justify-center font-display font-bold text-base shrink-0">
+                      {cus.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-display font-semibold text-[#14271C] text-base">
+                          {cus.name}
+                        </span>
+                        {cus.completedCount >= 3 && (
+                          <span className="inline-flex items-center gap-0.5 bg-[#C5A880]/20 text-[#14271C] text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">
+                            <Sparkles className="h-3 w-3 text-[#C5A880]" />
+                            VIP Member
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-[#526056] mt-1">
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3 text-[#8EAA97]" />
+                          {cus.phone || 'Chưa có SĐT'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Mail className="h-3 w-3 text-[#8EAA97]" />
+                          {cus.email}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 self-end sm:self-center">
+                    <div className="text-right">
+                      <span className="text-[11px] text-[#8EAA97] block">Lịch sử trị liệu</span>
+                      <span className="font-semibold text-xs text-[#14271C]">
+                        {cus.completedCount} / {cus.bookingsCount} lượt hoàn thành
+                      </span>
+                    </div>
+
+                    <div className="text-right hidden md:block">
+                      <span className="text-[11px] text-[#8EAA97] block">Tổng chi tiêu</span>
+                      <span className="font-bold text-xs text-[#1E3B2B]">
+                        {Number(cus.totalSpent).toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+
+                    <div className="p-1 rounded-full text-[#8EAA97] hover:text-[#14271C]">
+                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Detail Panel */}
+                {isExpanded && (
+                  <div className="p-6 border-t border-[#E2E8E3] bg-[#FAFBF9] space-y-5 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {/* Left: Preferences & Visit History */}
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs font-semibold text-[#14271C] flex items-center gap-1.5 mb-1.5">
+                            <Heart className="h-3.5 w-3.5 text-[#C5A880]" />
+                            Sở thích & Lưu ý đặc biệt của khách
+                          </Label>
+                          <Input
+                            value={currentPref}
+                            onChange={(e) => handlePrefsChange(cus.id, e.target.value)}
+                            placeholder="Ví dụ: Ưu tiên KTV nữ, massage lực nhẹ..."
+                            className="bg-white text-xs rounded-xl border-[#E2E8E3]"
+                          />
                         </div>
-                      </td>
-                      <td className="py-4 px-6 text-[#526056]">
-                        <div>{customer.phone}</div>
-                        <div className="text-[11px] text-[#8EAA97]">{customer.email}</div>
-                      </td>
-                      <td className="py-4 px-6 text-center font-bold text-[#14271C]">
-                        {customer.bookingsCount} lần
-                      </td>
-                      <td className="py-4 px-6 text-right font-display font-bold text-[#1E3B2B] text-sm">
-                        {customer.totalSpent.toLocaleString('vi-VN')} đ
-                      </td>
-                      <td className="py-4 px-6 text-[#526056]">{customer.lastVisit}</td>
-                      <td className="py-4 px-6 text-right text-[#8EAA97]">
-                        {isExpanded ? <ChevronUp className="h-4 w-4 inline-block" /> : <ChevronDown className="h-4 w-4 inline-block" />}
-                      </td>
-                    </tr>
 
-                    {/* Expandable Profile Panel (Đã loại bỏ Sở thích & Yêu cầu riêng theo yêu cầu) */}
-                    {isExpanded && (
-                      <tr className="bg-[#F8F9F5]/70">
-                        <td colSpan={6} className="p-6">
-                          <div className="bg-white p-6 rounded-2xl border border-[#E2E8E3] shadow-xs space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8E3]">
-                              <div>
-                                <h4 className="font-display font-semibold text-base text-[#14271C]">
-                                  Ghi chú nội bộ chuyên viên ({customer.name})
-                                </h4>
-                                <p className="text-xs text-[#6B726C]">
-                                  Lưu lại các đặc điểm da, lưu ý khi phục vụ và phản hồi trước đó
-                                </p>
-                              </div>
+                        <div className="p-3.5 rounded-xl bg-white border border-[#E2E8E3] text-xs space-y-1">
+                          <span className="text-[#8EAA97] block text-[11px]">Lần ghé thăm gần nhất:</span>
+                          <span className="font-semibold text-[#14271C]">
+                            {cus.lastVisit ? new Date(cus.lastVisit).toLocaleString('vi-VN') : 'Khách hàng mới'}
+                          </span>
+                        </div>
+                      </div>
 
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" variant="outline" className="text-xs h-9">
-                                  <Phone className="h-3.5 w-3.5 mr-1 text-[#8EAA97]" /> Gọi điện
-                                </Button>
-                                <Button size="sm" variant="outline" className="text-xs h-9">
-                                  <Mail className="h-3.5 w-3.5 mr-1 text-[#8EAA97]" /> Gửi email
-                                </Button>
-                              </div>
-                            </div>
-
-                            {/* Editable Internal Notes */}
-                            <div className="space-y-3">
-                              <Textarea
-                                value={currentNote}
-                                onChange={(e) => handleNoteChange(customer.id, e.target.value)}
-                                rows={3}
-                                placeholder="Nhập ghi chú chăm sóc khách hàng..."
-                                className="text-xs bg-[#F8F9F5] border-[#E2E8E3] rounded-xl leading-relaxed focus:bg-white"
-                              />
-
-                              <div className="flex items-center justify-between pt-1">
-                                <div className="text-[11px] text-[#8EAA97]">
-                                  Tỷ lệ hoàn thành lịch hẹn: {Math.round((customer.completedCount / Math.max(1, customer.bookingsCount)) * 100)}% ({customer.completedCount}/{customer.bookingsCount} ca)
-                                </div>
-
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleSaveNote(customer.id)}
-                                  className="bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs h-9 px-4 font-semibold"
-                                >
-                                  <Save className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
-                                  Lưu ghi chú
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                      {/* Right: Internal Staff Notes with Save Button */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-semibold text-[#14271C]">
+                            Ghi chú nội bộ dành cho Lễ tân & KTV
+                          </Label>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveNote(cus.id)}
+                            className="h-7 px-3 rounded-lg bg-[#1E3B2B] text-white hover:bg-[#14271C] text-[11px] font-semibold cursor-pointer"
+                          >
+                            <Save className="h-3 w-3 mr-1" />
+                            Lưu ghi chú
+                          </Button>
+                        </div>
+                        <Textarea
+                          rows={3}
+                          value={currentNote}
+                          onChange={(e) => handleNoteChange(cus.id, e.target.value)}
+                          placeholder="Ghi chú thể trạng, vùng đau mỏi cần tập trung, thói quen thanh toán..."
+                          className="bg-white text-xs rounded-xl border-[#E2E8E3]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
-      </Card>
+      )}
 
-      {/* Modal Thêm Khách Hàng Mới */}
+      {/* Add Customer Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <form onSubmit={handleCreateCustomer} className="space-y-4">
-          <DialogHeader>
-            <DialogTitle>Thêm khách hàng mới</DialogTitle>
-            <DialogDescription>
-              Tạo hồ sơ thành viên mới trong hệ thống chăm sóc khách hàng Lunara
-            </DialogDescription>
-          </DialogHeader>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-luxury border border-[#E2E8E3] animate-in fade-in zoom-in-95">
+            <DialogHeader>
+              <DialogTitle className="font-display text-xl text-[#14271C]">
+                Đăng ký hồ sơ khách hàng mới
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#6B726C]">
+                Tạo tài khoản và lưu trữ sở thích liệu trình tại quầy tiếp đón.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-3 text-xs">
-            <div className="space-y-1">
-              <Label>Họ và tên khách hàng *</Label>
-              <Input
-                required
-                placeholder="Ví dụ: Lê Thị Thanh Nhàn"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                className="h-10 text-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleCreateCustomer} className="space-y-3.5 my-4">
               <div className="space-y-1">
-                <Label>Số điện thoại *</Label>
+                <Label className="text-xs">Họ và tên khách hàng *</Label>
                 <Input
+                  placeholder="VD: Nguyễn Thùy Linh..."
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                   required
-                  placeholder="0901 234 567"
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                  className="h-10 text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Số điện thoại *</Label>
+                  <Input
+                    placeholder="09..."
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Email</Label>
+                  <Input
+                    placeholder="linh@gmail.com"
+                    type="email"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Sở thích trị liệu</Label>
+                <Input
+                  placeholder="Lực massage vừa, tinh dầu sả chanh..."
+                  value={formPrefs}
+                  onChange={(e) => setFormPrefs(e.target.value)}
                 />
               </div>
 
               <div className="space-y-1">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  placeholder="thanhnhan@gmail.com"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                  className="h-10 text-xs"
+                <Label className="text-xs">Ghi chú nội bộ</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="Khách đăng ký qua giới thiệu..."
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="space-y-1">
-              <Label>Ghi chú nội bộ ban đầu</Label>
-              <Textarea
-                rows={3}
-                placeholder="Ghi chú về thói quen, loại da hoặc nhân viên giới thiệu..."
-                value={formNotes}
-                onChange={(e) => setFormNotes(e.target.value)}
-                className="text-xs"
-              />
-            </div>
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddModalOpen(false)}
+                  className="rounded-xl text-xs"
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="submit"
+                  className="rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold"
+                >
+                  Tạo hồ sơ
+                </Button>
+              </DialogFooter>
+            </form>
           </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setAddModalOpen(false)}
-              className="text-xs h-10"
-            >
-              Hủy
-            </Button>
-            <Button
-              type="submit"
-              className="bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs h-10 px-4 font-semibold"
-            >
-              Lưu khách hàng
-            </Button>
-          </DialogFooter>
-        </form>
+        </div>
       </Dialog>
     </div>
   );

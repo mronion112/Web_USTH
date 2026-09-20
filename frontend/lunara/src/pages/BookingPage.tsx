@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Calendar } from '@/components/ui/calendar';
@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, ApiBooking, ApiService, PublicStaff, json, events } from '@/lib/api';
+import { ApiService, PublicStaff, bookingsApi, servicesApi, paymentsApi, profileApi, staffDirectoryApi } from '@/lib/api';
+import { useRefresh } from '@/lib/use-refresh';
 import {
   Clock,
   User,
@@ -22,10 +23,13 @@ import {
 } from 'lucide-react';
 
 interface SelectedServiceItem {
-  serviceId: string;
+  serviceId: string | number;
   durationMinutes: number;
   lineAmount: number;
 }
+
+const SLOT_TIMES = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30',
+  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'];
 
 export const BookingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,68 +43,108 @@ export const BookingPage: React.FC = () => {
   const [staff, setStaff] = useState<PublicStaff[]>([]);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
-  const submission = useRef<{ signature: string; key: string } | null>(null);
-  const [availabilityTick, setAvailabilityTick] = useState(0);
-  useEffect(() => { if (user) setCustomerName(user.displayName); }, [user]);
-  useEffect(() => {
-    api<ApiService[]>('/api/v1/services').then((items) => {
-      setServices(items);
-      if (items.length) setSelectedServices({ [items[0].id]: { serviceId: items[0].id, durationMinutes: items[0].minimumDurationMinutes, lineAmount: items[0].basePrice } });
-    }).catch((e) => setError(e.message));
-    api<PublicStaff[]>('/api/v1/staff').then(setStaff).catch((e) => setError(e.message));
-  }, []);
+
   useEffect(() => {
     if (!user) return;
-    const source = events();
-    source.addEventListener('schedule.events', () => setAvailabilityTick((n) => n + 1));
-    return () => source.close();
+    setCustomerName(user.displayName);
+    profileApi.getMe().then((profile) => {
+      setCustomerName(profile.displayName || user.displayName);
+      setCustomerPhone(profile.phone || '');
+    }).catch(() => undefined);
   }, [user]);
 
-  // Selected Services: default to Massage Thư Giãn (60p) + Chăm Sóc Da Mặt (45p)
+  useEffect(() => {
+    servicesApi.getAll().then((items) => {
+      setServices(items);
+      if (items.length) {
+        setSelectedServices({
+          [String(items[0].id)]: {
+            serviceId: items[0].id,
+            durationMinutes: items[0].minimumDurationMinutes,
+            lineAmount: items[0].basePrice,
+          },
+        });
+      }
+    }).catch((e) => setError(e.message));
+
+    staffDirectoryApi.getAll().then(setStaff).catch((e) => setError(e.message));
+  }, []);
+
+  // Selected Services: default to first service
   const [selectedServices, setSelectedServices] = useState<Record<string, SelectedServiceItem>>({});
 
-  // Staff Selection: default to Linh (acc-stf-1)
+  // Staff Selection: default to none (auto-assign)
   const [selectedStaffId, setSelectedStaffId] = useState<string>('none');
 
   // Date & Time Selection
-  const [selectedDate, setSelectedDate] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; });
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d;
+  });
   const [selectedTime, setSelectedTime] = useState<string>('');
 
   // Time Slots Definition
-  const slotTimes = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'];
-  const [timeSlots, setTimeSlots] = useState(slotTimes.map(time => ({ time, status: 'booked' })));
-  const startAt = (time: string) => `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}T${time}:00+07:00`;
-  const lineInputs = () => Object.values(selectedServices).map((item) => {
-    const service = services.find((s) => s.id === item.serviceId)!;
-    return { serviceId: Number(item.serviceId), additionalDurationSteps: service.isDurationAdjustable ? Math.round((item.durationMinutes - service.minimumDurationMinutes) / (service.durationStepMinutes || 30)) : 0 };
-  });
+  const [timeSlots, setTimeSlots] = useState(SLOT_TIMES.map(time => ({ time, status: 'booked' })));
+
+  const loadAvailability = useCallback(async (signal?: AbortSignal) => {
+    if (!services.length || !Object.keys(selectedServices).length) {
+      setTimeSlots(SLOT_TIMES.map(time => ({ time, status: 'booked' })));
+      return;
+    }
+
+    const yyyymmdd = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+    const items = Object.values(selectedServices).map((item) => ({
+      serviceId: Number(item.serviceId),
+      durationMinutes: item.durationMinutes,
+    }));
+
+    try {
+      const res = await bookingsApi.getAvailability({ from: `${yyyymmdd}T08:00:00`,
+        to: `${yyyymmdd}T19:00:00`, items,
+        staffAccountId: selectedStaffId === 'none' ? undefined : Number(selectedStaffId) }, signal);
+      const availableStarts = new Set(
+        (res.slots || []).map((s) => {
+          const timePart = s.bookingStart.split('T')[1]?.slice(0, 5);
+          return timePart;
+        })
+      );
+      const updated = SLOT_TIMES.map((time) => ({
+        time,
+        status: availableStarts.has(time) ? 'available' : 'booked',
+      }));
+      setTimeSlots(updated);
+      if (selectedTime && !availableStarts.has(selectedTime)) {
+        setSelectedTime('');
+      }
+    } catch (availabilityError) {
+      if (availabilityError instanceof DOMException && availabilityError.name === 'AbortError') return;
+      setTimeSlots(SLOT_TIMES.map((time) => ({ time, status: 'booked' })));
+    }
+  }, [services, selectedServices, selectedDate, selectedStaffId, selectedTime]);
+
   useEffect(() => {
-    if (!services.length || !Object.keys(selectedServices).length) { setTimeSlots(slotTimes.map(time => ({ time, status: 'booked' }))); return; }
-    let cancelled = false;
-    const items = lineInputs();
-    Promise.all(slotTimes.map(async (time) => {
-      try {
-        const result = await api<{ staffAccountIds: string[] }>('/api/v1/availability', { method: 'POST', body: json({ bookingStart: startAt(time), items }) });
-        return { time, status: result.staffAccountIds.length && (selectedStaffId === 'none' || result.staffAccountIds.includes(selectedStaffId)) ? 'available' : 'booked' };
-      } catch { return { time, status: 'booked' }; }
-    })).then((slots) => { if (!cancelled) { setTimeSlots(slots); if (selectedTime && !slots.find(s => s.time === selectedTime && s.status === 'available')) setSelectedTime(''); } });
-    return () => { cancelled = true; };
-  }, [services, selectedServices, selectedDate, selectedStaffId, availabilityTick]);
+    const controller = new AbortController();
+    void loadAvailability(controller.signal);
+    return () => controller.abort();
+  }, [loadAvailability]);
+  useRefresh('availability', loadAvailability);
 
   // Toggle or Update Service Selection
-  const toggleService = (serviceId: string) => {
-    const srv = services.find((s) => s.id === serviceId);
+  const toggleService = (serviceId: string | number) => {
+    const srv = services.find((s) => String(s.id) === String(serviceId));
     if (!srv) return;
 
+    const key = String(serviceId);
     setSelectedServices((prev) => {
       const next = { ...prev };
-      if (next[serviceId]) {
+      if (next[key]) {
         // If already selected, allow removing if more than 1 service selected
         if (Object.keys(next).length > 1) {
-          delete next[serviceId];
+          delete next[key];
         }
       } else {
-        next[serviceId] = {
+        next[key] = {
           serviceId: srv.id,
           durationMinutes: srv.minimumDurationMinutes,
           lineAmount: srv.basePrice,
@@ -111,12 +155,13 @@ export const BookingPage: React.FC = () => {
   };
 
   // Adjust Duration for Adjustable Services (+ / - 30 minutes)
-  const adjustDuration = (serviceId: string, deltaMinutes: number) => {
-    const srv = services.find((s) => s.id === serviceId);
+  const adjustDuration = (serviceId: string | number, deltaMinutes: number) => {
+    const srv = services.find((s) => String(s.id) === String(serviceId));
     if (!srv || !srv.isDurationAdjustable) return;
 
+    const key = String(serviceId);
     setSelectedServices((prev) => {
-      const current = prev[serviceId];
+      const current = prev[key];
       if (!current) return prev;
 
       const newDuration = Math.max(
@@ -133,7 +178,7 @@ export const BookingPage: React.FC = () => {
 
       return {
         ...prev,
-        [serviceId]: {
+        [key]: {
           ...current,
           durationMinutes: newDuration,
           lineAmount: newLineAmount,
@@ -175,16 +220,41 @@ export const BookingPage: React.FC = () => {
 
   const handleConfirmBooking = async () => {
     if (!selectedTime || !user || !Object.keys(selectedServices).length) return;
+    if (!customerName.trim() || !customerPhone.trim()) {
+      setError('Vui lòng nhập đầy đủ họ tên và số điện thoại.');
+      return;
+    }
     setError(''); setPending(true);
     try {
-      const body = json({
-        customerName, customerPhone, customerNote, bookingStart: startAt(selectedTime), staffAccountId: selectedStaffId === 'none' ? null : Number(selectedStaffId), items: lineInputs(),
+      const yyyymmdd = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+      const items = Object.values(selectedServices).map((item) => ({
+        serviceId: Number(item.serviceId),
+        durationMinutes: item.durationMinutes,
+      }));
+      if (user.roleCode === 'CUSTOMER') {
+        try {
+          await profileApi.updateMe({
+            displayName: customerName.trim(),
+            phone: customerPhone.trim(),
+          });
+        } catch {
+          // Non-blocking profile update failure
+        }
+      }
+      const booking = await bookingsApi.create({
+        customerNote,
+        bookingStart: `${yyyymmdd}T${selectedTime}:00`,
+        staffAccountId: selectedStaffId === 'none' ? undefined : Number(selectedStaffId),
+        items,
       });
-      if (submission.current?.signature !== body) submission.current = { signature: body, key: crypto.randomUUID() };
-      const booking = await api<ApiBooking>('/api/v1/bookings', { method: 'POST', headers: { 'Idempotency-Key': submission.current.key }, body });
+      await paymentsApi.create({ bookingId: booking.id, method: 'QR' });
       navigate(`/checkout?booking=${booking.bookingCode}`, { state: booking });
-    } catch (e) { setError(e instanceof Error ? e.message : 'Không thể giữ lịch. Vui lòng chọn khung giờ khác.'); setAvailabilityTick((n) => n + 1); }
-    finally { setPending(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không thể giữ lịch. Vui lòng chọn khung giờ khác.');
+      await loadAvailability();
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -504,14 +574,24 @@ export const BookingPage: React.FC = () => {
                 </div>
 
                 {error && <p className="text-xs text-red-300" role="alert">{error}</p>}
-                <Button
-                  onClick={handleConfirmBooking}
-                  disabled={pending || !selectedTime || !Object.keys(selectedServices).length || !user}
-                  className="w-full rounded-xl h-13 bg-[#C5A880] text-[#14271C] hover:bg-[#ba9b71] font-bold text-sm tracking-wide shadow-md transition-transform hover:scale-[1.01]"
-                >
-                  {pending ? 'Đang giữ lịch…' : 'Xác nhận đặt lịch'}
-                  <ArrowRight className="h-4 w-4 ml-1.5" />
-                </Button>
+                {!user ? (
+                  <Button
+                    onClick={() => navigate('/auth?redirect=/booking')}
+                    className="w-full rounded-xl h-13 bg-[#C5A880] text-[#14271C] hover:bg-[#ba9b71] font-bold text-sm tracking-wide shadow-md transition-transform hover:scale-[1.01] cursor-pointer"
+                  >
+                    Đăng nhập Google để đặt lịch
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleConfirmBooking}
+                    disabled={pending || !selectedTime || !Object.keys(selectedServices).length}
+                    className="w-full rounded-xl h-13 bg-[#C5A880] text-[#14271C] hover:bg-[#ba9b71] font-bold text-sm tracking-wide shadow-md transition-transform hover:scale-[1.01] cursor-pointer"
+                  >
+                    {pending ? 'Đang giữ lịch…' : 'Xác nhận đặt lịch'}
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                )}
 
                 <p className="text-[11px] text-[#8EAA97] text-center flex items-center justify-center gap-1">
                   <Info className="h-3 w-3" /> Quý khách sẽ chuyển tiếp đến cổng quét mã QR

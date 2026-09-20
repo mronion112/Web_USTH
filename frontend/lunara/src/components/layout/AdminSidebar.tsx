@@ -37,12 +37,15 @@ export const AdminSidebar: React.FC<{ onCloseMobile?: () => void }> = ({ onClose
   // If role is THERAPIST, show dedicated therapist menu
   const isTherapist = role === 'THERAPIST';
   const allowedTitles = ROLE_BASED_SECTIONS[role] || [];
+  const home = isTherapist ? '/staff/my-work'
+    : role === 'ACCOUNTANT' ? '/admin/payments'
+      : role === 'RECEPTIONIST' ? '/admin/live' : '/admin/dashboard';
 
   return (
     <aside className="w-64 bg-[#14271C] text-[#D9E5DC] flex flex-col h-full border-r border-[#2E4A37] select-none font-body">
       {/* Brand Header */}
       <div className="h-20 flex items-center px-6 border-b border-[#2E4A37] justify-between">
-        <Link to="/admin/dashboard" className="flex items-center gap-2">
+        <Link to={home} className="flex items-center gap-2">
           <span className="font-display text-2xl font-semibold text-white tracking-tight">
             Lunara
           </span>

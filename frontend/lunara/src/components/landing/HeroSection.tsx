@@ -37,8 +37,8 @@ export const HeroSection: React.FC = () => {
             {/* CTAs */}
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <Button
-                onClick={() => navigate('/auth')}
-                className="rounded-full h-14 px-8 bg-[#1E3B2B] text-white hover:bg-[#14271C] shadow-luxury text-base font-semibold transition-transform hover:scale-[1.02]"
+                onClick={() => navigate('/booking')}
+                className="rounded-full h-14 px-8 bg-[#1E3B2B] text-white hover:bg-[#14271C] shadow-luxury text-base font-semibold transition-transform hover:scale-[1.02] cursor-pointer"
               >
                 Đặt lịch ngay
                 <ArrowRight className="h-4 w-4 ml-2 text-[#C5A880]" />
