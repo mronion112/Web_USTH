@@ -1,0 +1,68 @@
+{
+  "dataset": "Production",
+  "snapshot": "2026-09-15 15:00:00",
+  "row_counts": {
+    "roles": 6,
+    "permissions": 18,
+    "role_permissions": 61,
+    "accounts": 173,
+    "customer_profiles": 145,
+    "staff_profiles": 16,
+    "services": 12,
+    "staff_services": 78,
+    "staff_working_hours": 96,
+    "staff_time_off": 5,
+    "bookings": 600,
+    "booking_items": 680,
+    "booking_events": 2691,
+    "payments": 600,
+    "feedback": 215
+  },
+  "checksums": {
+    "roles": "3ebc9159ba91b9c15b54af203d90d5eb2fe4c9bd6d84010d7fa0c0980df05ca1",
+    "permissions": "c272fd9ec7bb0e8e32f917edbb59d8ea8374f8c3f6cff802d6e7fc20e520383c",
+    "role_permissions": "397ba62cab7de04b354ced52a04c8d9178e0330bacb8722b0d70f20e885a8713",
+    "accounts": "b405fbc9f687872ceb0a0bdb8ec99624becc9ca0ecdd13138f67534872595750",
+    "customer_profiles": "223b998ed69a44335663757bf4376f75d92e4df51704a25c11df585b159cfb33",
+    "staff_profiles": "0a84904c421a58c0ce669749fcc6466df078ba0fdc0ddb21c9824ea6f1872bc4",
+    "services": "7356837ddb68d207f279b585e1fb6d4c62bf3c7996ff734278c6008d08dfbafa",
+    "staff_services": "479b16cca8606e445118dcda167674fcbdbcf491feb1f990db4fa4b85cda7af0",
+    "staff_working_hours": "fb1c977998099a92e43712f23629342bd7431aa89490badefa94cd0265ed2c8f",
+    "staff_time_off": "d04be6845c08aa7f6a42e4263d5c080eb20635d0d21ea0a80a5f55e6206ec0aa",
+    "bookings": "9c666af1a98bbcf3d324f0e991c45cf9d760a0a97202b8efd5e0cf58fb2582a4",
+    "booking_items": "dedcd53c92c116f9375dcf331514f10f111f91d5f66ab6b247f7a44a9e79fc5c",
+    "booking_events": "4da3765884c06438eab025e84acfae7cdf1efdf42743a28d72eea3ee9dd217a1",
+    "payments": "710f99e9c87ef367b592ac601811f111b886c9bc61bd967ec08423c65c653cf1",
+    "feedback": "0fd1618fdf08e9702a32cd97a5ddf6d193372d288aeae80ad18c5d6c121ba8fc"
+  },
+  "booking_status_counts": {
+    "CHECKED_IN": 15,
+    "COMPLETED": 300,
+    "CONFIRMED": 120,
+    "IN_SERVICE": 15,
+    "PENDING_PAYMENT": 150
+  },
+  "payment_status_counts": {
+    "FAILED": 14,
+    "PAID": 292,
+    "REFUNDED": 3,
+    "UNPAID": 291
+  },
+  "payment_method_counts": {
+    "AT_SPA": 209,
+    "CARD": 213,
+    "QR": 178
+  },
+  "feedback_rating_counts": {
+    "1": 5,
+    "2": 9,
+    "3": 29,
+    "4": 67,
+    "5": 105
+  },
+  "assignment_source_counts": {
+    "ADMIN": 136,
+    "CUSTOMER": 203,
+    "SYSTEM": 261
+  }
+}

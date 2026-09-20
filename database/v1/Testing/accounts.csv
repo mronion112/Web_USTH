@@ -1,0 +1,21 @@
+id,role_id,google_subject,email,display_name,avatar_url,is_active,provisioned_by_account_id,last_login_at,created_at,updated_at
+1,1,864741682659246165941,owner1@lunara-spa.demo,Phan Quang Khánh,https://ui-avatars.com/api/?name=Phan+Quang+Khánh,1,\N,2026-04-20 13:47:00,2026-04-10 14:47:00,2026-04-20 14:47:00
+2,2,234612866671137349591,manager2@lunara-spa.demo,Ngô Tuyết Hà,https://ui-avatars.com/api/?name=Ngô+Tuyết+Hà,1,1,2026-05-09 22:47:00,2026-04-21 14:47:00,2026-05-09 23:47:00
+3,3,345958690136958437148,reception3@lunara-spa.demo,Hoàng Phương Thư,https://ui-avatars.com/api/?name=Hoàng+Phương+Thư,1,2,2026-04-29 00:47:00,2026-04-27 14:47:00,2026-04-29 01:47:00
+4,4,533380166715982778353,therapist4@lunara-spa.demo,Mai Yến Quỳnh,https://ui-avatars.com/api/?name=Mai+Yến+Quỳnh,1,2,2026-05-13 20:47:00,2026-04-26 14:47:00,2026-05-13 21:47:00
+5,4,214580978633730445860,therapist5@lunara-spa.demo,Đặng Tuấn Huy,https://ui-avatars.com/api/?name=Đặng+Tuấn+Huy,1,2,2026-05-13 14:47:00,2026-04-25 14:47:00,2026-05-13 15:47:00
+6,4,866471281437404669139,therapist6@lunara-spa.demo,Huỳnh Bảo My,https://ui-avatars.com/api/?name=Huỳnh+Bảo+My,1,2,2026-06-03 08:47:00,2026-05-13 14:47:00,2026-06-03 09:47:00
+7,4,864328270894359252658,therapist7@lunara-spa.demo,Hoàng Xuân Thịnh,https://ui-avatars.com/api/?name=Hoàng+Xuân+Thịnh,1,2,2026-05-06 09:47:00,2026-05-01 14:47:00,2026-05-06 10:47:00
+8,5,751830949189419505854,accountant8@lunara-spa.demo,Huỳnh Thanh Hà,https://ui-avatars.com/api/?name=Huỳnh+Thanh+Hà,1,1,2026-05-24 11:47:00,2026-05-09 14:47:00,2026-05-24 12:47:00
+9,6,843446933943782378062,customer9@lunara-spa.demo,Đặng Việt Khánh,https://ui-avatars.com/api/?name=Đặng+Việt+Khánh,1,\N,2026-09-05 06:07:00,2026-08-16 13:07:00,2026-09-05 07:07:00
+10,6,826323242342272244442,customer10@lunara-spa.demo,Phan Văn Thịnh,https://ui-avatars.com/api/?name=Phan+Văn+Thịnh,1,\N,2026-07-17 05:26:00,2026-07-03 05:26:00,2026-07-17 06:26:00
+11,6,726991994452507060176,customer11@lunara-spa.demo,Bùi Bảo An,https://ui-avatars.com/api/?name=Bùi+Bảo+An,1,\N,2026-08-26 12:20:00,2026-08-15 09:20:00,2026-08-26 13:20:00
+12,6,948888228168274983594,customer12@lunara-spa.demo,Phạm Quang An,https://ui-avatars.com/api/?name=Phạm+Quang+An,1,\N,2025-12-24 02:59:00,2025-12-15 05:59:00,2025-12-24 03:59:00
+13,6,638231739951298545914,customer13@lunara-spa.demo,Mai Phương Hiền,https://ui-avatars.com/api/?name=Mai+Phương+Hiền,1,\N,2025-12-06 02:30:00,2025-11-29 14:30:00,2025-12-06 03:30:00
+14,6,878980539622722818343,customer14@lunara-spa.demo,Lê Gia Sơn,https://ui-avatars.com/api/?name=Lê+Gia+Sơn,1,\N,2026-06-21 01:02:00,2026-06-12 08:02:00,2026-06-21 02:02:00
+15,6,837776019181646887116,customer15@lunara-spa.demo,Trịnh Quỳnh Uyên,https://ui-avatars.com/api/?name=Trịnh+Quỳnh+Uyên,1,\N,2026-02-13 15:19:00,2026-02-08 07:19:00,2026-02-13 16:19:00
+16,6,200036609144069679186,customer16@lunara-spa.demo,Lý Thanh Thư,https://ui-avatars.com/api/?name=Lý+Thanh+Thư,1,\N,2026-01-18 08:37:00,2025-12-29 08:37:00,2026-01-18 09:37:00
+17,6,971230360696215526995,customer17@lunara-spa.demo,Huỳnh Bảo Huy,https://ui-avatars.com/api/?name=Huỳnh+Bảo+Huy,1,\N,2025-08-29 07:25:00,2025-08-18 11:25:00,2025-08-29 08:25:00
+18,6,876875340781775074430,customer18@lunara-spa.demo,Lý Minh Phương,https://ui-avatars.com/api/?name=Lý+Minh+Phương,1,\N,2026-05-28 23:00:00,2026-05-22 15:00:00,2026-05-29 00:00:00
+19,6,966951040057639982196,customer19@lunara-spa.demo,Mai Chí Cường,https://ui-avatars.com/api/?name=Mai+Chí+Cường,1,\N,2025-08-22 15:30:00,2025-08-14 13:30:00,2025-08-22 16:30:00
+20,6,975508883520098917475,customer20@lunara-spa.demo,Hồ Ngọc Phương,https://ui-avatars.com/api/?name=Hồ+Ngọc+Phương,1,\N,2026-04-10 04:40:00,2026-04-05 11:40:00,2026-04-10 05:40:00
