@@ -26,7 +26,12 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     @Transactional
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         OAuth2User oAuth2User = super.loadUser(userRequest);
-        
+
+        upsertAccount(oAuth2User);
+        return oAuth2User;
+    }
+
+    void upsertAccount(OAuth2User oAuth2User) {
         String email = Optional.ofNullable(oAuth2User.getAttribute("email"))
                 .map(Object::toString)
                 .orElseThrow(() -> new OAuth2AuthenticationException("Email not found from OAuth2 provider"));
@@ -39,8 +44,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             account -> updateExistingAccount(account, subject, avatar),
             () -> createNewCustomerAccount(email, subject, name, avatar)
         );
-
-        return oAuth2User;
     }
 
     private void updateExistingAccount(Account account, String subject, String avatar) {
@@ -59,8 +62,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     }
 
     private void createNewCustomerAccount(String email, String subject, String name, String avatar) {
-        Role customerRole = roleRepository.findByCode("ROLE_CUSTOMER")
-                .orElseThrow(() -> new OAuth2AuthenticationException("ROLE_CUSTOMER not found"));
+        Role customerRole = roleRepository.findByCode("CUSTOMER")
+                .orElseThrow(() -> new OAuth2AuthenticationException("CUSTOMER role not found"));
 
         Account account = Account.builder()
                 .email(email)

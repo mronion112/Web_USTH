@@ -65,3 +65,13 @@ Lấy số liệu tổng quan cho Manager Dashboard.
 ```
 
 **Quy tắc chính:** Đây là API tổng hợp dữ liệu, không cần bảng Dashboard riêng.
+
+---
+
+## 2. Báo cáo theo khoảng ngày
+
+`GET /api/reports/summary?from=2026-09-01&to=2026-09-30&groupBy=DAY`
+
+`groupBy` nhận `DAY`, `WEEK` hoặc `MONTH`; khoảng ngày tối đa 366 ngày. Endpoint trả tổng
+booking, booking hoàn thành, doanh thu đã thanh toán và chuỗi số liệu theo kỳ. Chỉ Owner,
+Manager hoặc Accountant được truy cập.

@@ -1,9 +1,12 @@
 package com.kevin.lunaraspa.booking.repository;
 
 import com.kevin.lunaraspa.booking.entity.Booking;
+import com.kevin.lunaraspa.booking.entity.BookingStatus;
 import com.kevin.lunaraspa.core.data.BaseRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -19,11 +22,26 @@ public interface BookingRepository extends BaseRepository<Booking, Long> {
     List<Booking> findByCustomerAccountIdOrderByBookingStartDesc(Long customerAccountId);
 
     @EntityGraph(attributePaths = "items")
+    List<Booking> findByStaffAccountIdOrderByBookingStartDesc(Long staffAccountId);
+
+    @EntityGraph(attributePaths = "items")
+    List<Booking> findByStaffAccountIdAndBookingStartLessThanAndBookingEndGreaterThanOrderByBookingStartAsc(
+            Long staffAccountId, LocalDateTime end, LocalDateTime start);
+
+    long countByStatus(BookingStatus status);
+
+    long countByBookingStartGreaterThanEqualAndBookingStartLessThan(LocalDateTime start, LocalDateTime end);
+
+    @EntityGraph(attributePaths = "items")
     Optional<Booking> findByBookingCode(String bookingCode);
 
     @EntityGraph(attributePaths = "items")
     @Query("SELECT b FROM Booking b WHERE b.id = :id")
     Optional<Booking> findByIdWithItems(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :id")
+    Optional<Booking> findByIdForUpdate(@Param("id") Long id);
 
     @Query(value = """
             SELECT

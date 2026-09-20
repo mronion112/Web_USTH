@@ -45,6 +45,8 @@ GET
 
 Lấy các Booking được gán cho Staff hiện tại.
 
+Có thể truyền query `date=YYYY-MM-DD` để lấy agenda của một ngày.
+
 **Response JSON**
 
 ```json

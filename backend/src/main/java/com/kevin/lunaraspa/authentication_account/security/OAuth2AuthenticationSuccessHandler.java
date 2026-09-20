@@ -54,6 +54,19 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         redisTemplate.opsForValue().set(redisKeyAccess, accessToken, 60, TimeUnit.SECONDS);
         redisTemplate.opsForValue().set(redisKeyRefresh, refreshToken, 60, TimeUnit.SECONDS);
 
+        // Set cookies on response so the browser immediately retains session
+        Cookie accessCookie = new Cookie("lunara_access_token", accessToken);
+        accessCookie.setPath("/");
+        accessCookie.setMaxAge(7 * 24 * 60 * 60);
+        accessCookie.setHttpOnly(false);
+        response.addCookie(accessCookie);
+
+        Cookie refreshCookie = new Cookie("lunara_refresh_token", refreshToken);
+        refreshCookie.setPath("/");
+        refreshCookie.setMaxAge(30 * 24 * 60 * 60);
+        refreshCookie.setHttpOnly(false);
+        response.addCookie(refreshCookie);
+
         // Chỉ trả về đúng cái mã code vô thưởng vô phạt trên URL
         response.sendRedirect(frontendUrl + "/oauth2/redirect?code=" + authCode);
     }

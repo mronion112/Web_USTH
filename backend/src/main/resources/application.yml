@@ -3,14 +3,6 @@ spring.config.import: optional:file:.env.properties,optional:file:backend/.env.p
 server:
   port: ${BACKEND_PORT}
 
-springdoc:
-  packages-to-scan: com.kevin.lunaraspa
-  swagger-ui:
-    path: /swagger-ui.html
-    operations-sorter: method
-    tags-sorter: alpha
-    display-request-duration: true
-
 spring:
   application:
     name: lunara-spa
@@ -31,6 +23,26 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:lunara-api}
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_APP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+    test-connection: false
   security:
     oauth2:
       client:
@@ -40,8 +52,18 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: email, profile
 
+springdoc:
+  api-docs:
+    enabled: ${OPENAPI_ENABLED:true}
+  swagger-ui:
+    enabled: ${OPENAPI_ENABLED:true}
+    path: /swagger-ui.html
+
 app:
   frontend-url: ${FRONTEND_URL}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
   jwt:
     secret: ${JWT_SECRET}
     access-expiration-ms: ${JWT_EXPIRATION_MS}
@@ -63,3 +85,4 @@ app:
       api-key: ${CHROMA_API_KEY:}
       startup-indexing: ${CHROMA_STARTUP_INDEXING:false}
       upsert-batch-size: ${CHROMA_UPSERT_BATCH_SIZE:100}
+

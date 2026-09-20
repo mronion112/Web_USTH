@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.math.BigDecimal;
 
 @Repository
 public interface FeedbackRepository extends BaseRepository<Feedback, Long> {
@@ -14,6 +15,9 @@ public interface FeedbackRepository extends BaseRepository<Feedback, Long> {
     Optional<Feedback> findByBookingId(Long bookingId);
 
     boolean existsByBookingId(Long bookingId);
+
+    @Query("SELECT COALESCE(AVG(f.rating), 0) FROM Feedback f")
+    BigDecimal averageRating();
 
     @Query(value = "SELECT b.status FROM bookings b WHERE b.id = :bookingId", nativeQuery = true)
     Optional<String> findBookingStatusById(@Param("bookingId") Long bookingId);

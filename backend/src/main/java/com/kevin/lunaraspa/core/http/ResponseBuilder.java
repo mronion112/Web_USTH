@@ -91,7 +91,7 @@ public final class ResponseBuilder {
     }
     
     private static <T> ResponseEntity<Object> buildResponseEntityOk(T data, HttpStatus status, String message) {
-        return ResponseEntity.ok().body(buildApiResponse(data, status, message));
+        return ResponseEntity.status(status).body(buildApiResponse(data, status, message));
     }
     
     private static <T> ApiResponse<T> buildApiResponse(T data, HttpStatus status, String message) {

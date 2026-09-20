@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import org.springframework.http.HttpStatus;
 
 @Getter
 @Builder
@@ -15,16 +15,20 @@ import java.time.LocalDateTime;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class BookingApiResponse<T> {
     private boolean success;
+    private int status;
     private String message;
     private T data;
-    private LocalDateTime timestamp;
 
     public static <T> BookingApiResponse<T> success(String message, T data) {
+        return success(message, data, HttpStatus.OK);
+    }
+
+    public static <T> BookingApiResponse<T> success(String message, T data, HttpStatus status) {
         return BookingApiResponse.<T>builder()
                 .success(true)
+                .status(status.value())
                 .message(message)
                 .data(data)
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 }
