@@ -1,6 +1,7 @@
 package com.kevin.lunaraspa.feedback.config;
 
 import com.kevin.lunaraspa.authentication_account.security.JwtAuthenticationFilter;
+import com.kevin.lunaraspa.authentication_account.security.SecurityErrorWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +32,11 @@ public class FeedbackSecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/api/feedback/**").permitAll()
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint((request, response, exception) ->
+                                SecurityErrorWriter.write(response, 401, "Unauthorized"))
+                        .accessDeniedHandler((request, response, exception) ->
+                                SecurityErrorWriter.write(response, 403, "Forbidden")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -20,7 +20,9 @@ public enum BookingFeatureErrorCode implements BaseErrorCode {
     ACCESS_DENIED("BKG_010", "You do not have access to this booking", HttpStatus.FORBIDDEN),
     INVALID_STAFF_ID("BKG_011", "Staff account id must be a positive number", HttpStatus.BAD_REQUEST),
     BOOKING_NOT_ASSIGNABLE("BKG_012", "Staff cannot be assigned after service has started", HttpStatus.CONFLICT),
-    BOOKING_CODE_GENERATION_FAILED("BKG_013", "Could not generate booking code", HttpStatus.INTERNAL_SERVER_ERROR);
+    BOOKING_CODE_GENERATION_FAILED("BKG_013", "Could not generate booking code", HttpStatus.INTERNAL_SERVER_ERROR),
+    STAFF_ACCOUNT_REQUIRED("BKG_014", "An active staff account is required", HttpStatus.FORBIDDEN),
+    INVALID_STATUS_TRANSITION("BKG_015", "Booking status transition is not allowed", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;

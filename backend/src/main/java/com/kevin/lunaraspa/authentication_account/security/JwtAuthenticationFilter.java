@@ -28,20 +28,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        String jwt = null;
         final String authHeader = request.getHeader("Authorization");
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7);
+        } else if (request.getCookies() != null) {
+            for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
+                if ("lunara_access_token".equals(cookie.getName()) || "accessToken".equals(cookie.getName())) {
+                    jwt = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (jwt == null || jwt.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        final String jwt = authHeader.substring(7);
         
-        if (jwtBlacklistService.isBlacklisted(jwt)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         final String email;
         final String role;
         boolean expired;
@@ -56,6 +61,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (email == null || expired || SecurityContextHolder.getContext().getAuthentication() != null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Do not hit Redis for malformed/expired tokens. Besides avoiding unnecessary I/O,
+        // this prevents invalid bearer-token traffic from becoming a Redis amplification path.
+        if (jwtBlacklistService.isBlacklisted(jwt)) {
             filterChain.doFilter(request, response);
             return;
         }

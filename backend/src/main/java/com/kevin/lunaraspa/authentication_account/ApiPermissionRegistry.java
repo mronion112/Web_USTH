@@ -25,7 +25,7 @@ public class ApiPermissionRegistry {
         routes.add(new RoutePermission(HttpMethod.GET, "/api/v1/dummy-secure-endpoint", "DUMMY_VIEW"));
         
         // Authentication Account
-        routes.add(new RoutePermission(HttpMethod.GET, "/api/manager/accounts", "VIEW_ALL_ACCOUNTS"));
+        routes.add(new RoutePermission(HttpMethod.GET, "/api/manager/accounts", "ADMIN_ACCOUNTS_VIEW"));
     }
 
     public Optional<String> getRequiredPermission(HttpMethod method, String uri) {

@@ -57,11 +57,22 @@ GET
         "endAt": "2026-09-25T17:00:00",
         "reason": "Nghỉ phép"
       }
+    ],
+    "bookingBlocks": [
+      {
+        "bookingId": 100,
+        "bookingCode": "LNR-20260920-0100",
+        "status": "CONFIRMED",
+        "startAt": "2026-09-20T10:00:00",
+        "endAt": "2026-09-20T11:30:00"
+      }
     ]
   },
   "timestamp": "2026-09-20T10:00:00"
 }
 ```
+
+Có thể truyền query `from` và `to` theo ISO date-time; khoảng tối đa 93 ngày.
 
 ---
 
