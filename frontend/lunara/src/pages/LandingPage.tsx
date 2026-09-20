@@ -4,7 +4,9 @@ import { HeroSection } from '@/components/landing/HeroSection';
 import { CustomerReview } from '@/components/landing/CustomerReview';
 import { ServicesCollection } from '@/components/landing/ServicesCollection';
 import { PhilosophySection } from '@/components/landing/PhilosophySection';
+import { SpaPoliciesFaq } from '@/components/landing/SpaPoliciesFaq';
 import { Footer } from '@/components/layout/Footer';
+import { MascotCompanion } from '@/components/mascot/MascotCompanion';
 
 export const LandingPage: React.FC = () => {
   return (
@@ -15,7 +17,9 @@ export const LandingPage: React.FC = () => {
         <CustomerReview />
         <ServicesCollection />
         <PhilosophySection />
+        <SpaPoliciesFaq />
       </main>
+      <MascotCompanion />
       <Footer />
     </div>
   );

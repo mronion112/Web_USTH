@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { MOCK_STAFF, StaffMember } from '@/data/mock-staff';
-import { Plus, Edit2 } from 'lucide-react';
+import { Plus, Edit2, Calendar, X } from 'lucide-react';
 import { SlidingTabs } from '@/components/transitions/SlidingTabs';
 import { TiltCard } from '@/components/transitions/TiltCard';
+import { accountsApi, staffScheduleApi, staffOnboardingApi, servicesApi, ApiAccount, ApiService } from '@/lib/api';
 
 type ShiftType = 'MORNING' | 'AFTERNOON' | 'FULL_DAY' | 'OFF';
 
@@ -32,117 +31,156 @@ const DAYS_OF_WEEK = [
 ];
 
 export const StaffPage: React.FC = () => {
-  const [staffList, setStaffList] = useState<StaffMember[]>(MOCK_STAFF);
-  const [filterTab, setFilterTab] = useState<'ALL' | 'WORKING' | 'AVAILABLE' | 'LEAVE'>('ALL');
-  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const [staffList, setStaffList] = useState<ApiAccount[]>([]);
+  const [services, setServices] = useState<ApiService[]>([]);
+  const [filterTab, setFilterTab] = useState<'ALL' | 'WORKING' | 'AVAILABLE'>('ALL');
+  const [selectedStaff, setSelectedStaff] = useState<ApiAccount | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  // Weekly shift state for each staff (staffId -> array of 7 ShiftType)
-  const [staffSchedules, setStaffSchedules] = useState<Record<string, ShiftType[]>>({
-    'acc-stf-1': ['FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'OFF', 'FULL_DAY', 'FULL_DAY', 'MORNING'],
-    'acc-stf-2': ['MORNING', 'FULL_DAY', 'OFF', 'FULL_DAY', 'AFTERNOON', 'FULL_DAY', 'FULL_DAY'],
-    'acc-stf-3': ['FULL_DAY', 'OFF', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'OFF'],
-    'acc-stf-4': ['OFF', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'MORNING', 'OFF'],
-    'acc-stf-5': ['FULL_DAY', 'FULL_DAY', 'OFF', 'MORNING', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY'],
-  });
-
-  // Shift editing temporary state
+  // Weekly shift state for each staff
+  const [staffSchedules, setStaffSchedules] = useState<Record<number, ShiftType[]>>({});
   const [tempShifts, setTempShifts] = useState<ShiftType[]>([]);
 
   // Add Staff Form State
   const [formName, setFormName] = useState('');
-  const [formTitle, setFormTitle] = useState('Massage Therapist');
   const [formEmail, setFormEmail] = useState('');
-  const [formCode, setFormCode] = useState(`LNR-EMP-0${MOCK_STAFF.length + 1}`);
-  const [formSpecialties, setFormSpecialties] = useState('Massage, Trị Liệu');
+  const [formJobTitle, setFormJobTitle] = useState('Kỹ thuật viên trị liệu');
+  const [formServiceIds, setFormServiceIds] = useState<number[]>([]);
+  const [formDays, setFormDays] = useState<number[]>([1, 2, 3, 4, 5]);
 
-  const filteredStaff = staffList.filter((s) => {
-    if (filterTab === 'AVAILABLE') return s.profile.status === 'Available';
-    if (filterTab === 'LEAVE') return s.profile.status === 'Day off';
-    if (filterTab === 'WORKING') return s.profile.status !== 'Day off';
-    return true;
-  });
+  const reloadStaff = useCallback(async () => {
+    try {
+      const data = await accountsApi.getAll();
+      if (Array.isArray(data)) {
+        const therapists = data.filter((a) => a.role === 'THERAPIST');
+        const list = therapists.length > 0 ? therapists : data;
+        setStaffList(list);
 
-  // Dynamic counts for tabs
-  const countWorking = staffList.filter((s) => s.profile.status !== 'Day off').length;
-  const countAvailable = staffList.filter((s) => s.profile.status === 'Available').length;
-  const countLeave = staffList.filter((s) => s.profile.status === 'Day off').length;
+        const schedules = await Promise.all(list.map(async (staff) => ({ staff,
+          schedule: await staffScheduleApi.getSchedule(staff.id).catch(() => ({ workingHours: [] })),
+        })));
+        const schedMap: Record<number, ShiftType[]> = {};
+        schedules.forEach(({ staff, schedule }) => {
+          const shifts: ShiftType[] = Array(7).fill('OFF');
+          for (const hour of schedule.workingHours || []) {
+            if (!hour.isActive && !hour.active) continue;
+            const start = String(hour.startTime).slice(0, 5);
+            const end = String(hour.endTime).slice(0, 5);
+            shifts[hour.dayOfWeek - 1] = start < '09:00' && end <= '14:30' ? 'MORNING'
+              : start >= '14:00' ? 'AFTERNOON' : 'FULL_DAY';
+          }
+          schedMap[staff.id] = shifts;
+        });
+        setStaffSchedules(schedMap);
+      }
+    } catch (err) {
+      console.error('Failed to load staff accounts:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handleOpenDetail = (staff: StaffMember) => {
+  useEffect(() => {
+    reloadStaff();
+    servicesApi.getAll().then(setServices).catch(() => undefined);
+  }, [reloadStaff]);
+
+  const handleOpenDetail = async (staff: ApiAccount) => {
     setSelectedStaff(staff);
     setDetailOpen(true);
+    try {
+      const res = await staffScheduleApi.getSchedule(staff.id);
+      if (res && Array.isArray(res.workingHours) && res.workingHours.length > 0) {
+        const shifts: ShiftType[] = Array(7).fill('OFF');
+        res.workingHours.forEach((wh) => {
+          const d = wh.dayOfWeek; // 1 = Mon .. 7 = Sun
+          if (d >= 1 && d <= 7) {
+            shifts[d - 1] = wh.isActive ? 'FULL_DAY' : 'OFF';
+          }
+        });
+        setStaffSchedules((prev) => ({ ...prev, [staff.id]: shifts }));
+      }
+    } catch {
+      // Ignore if schedule empty
+    }
   };
 
-  const handleOpenShiftModal = () => {
-    if (!selectedStaff) return;
-    const currentSchedule = staffSchedules[selectedStaff.account.id] || [
-      'FULL_DAY',
-      'FULL_DAY',
-      'FULL_DAY',
-      'OFF',
-      'FULL_DAY',
-      'FULL_DAY',
-      'MORNING',
-    ];
-    setTempShifts([...currentSchedule]);
+  const handleOpenShiftEdit = (staff: ApiAccount) => {
+    setSelectedStaff(staff);
+    setTempShifts(staffSchedules[staff.id] || Array(7).fill('OFF'));
     setShiftModalOpen(true);
   };
 
-  const handleSaveShifts = () => {
+  const handleShiftSelect = (dayIndex: number, shift: ShiftType) => {
+    setTempShifts((prev) => {
+      const updated = [...prev];
+      updated[dayIndex] = shift;
+      return updated;
+    });
+  };
+
+  const handleSaveShifts = async () => {
     if (!selectedStaff) return;
-    setStaffSchedules((prev) => ({
-      ...prev,
-      [selectedStaff.account.id]: tempShifts,
-    }));
-    setShiftModalOpen(false);
-    setSuccessMsg(`Đã cập nhật ca làm việc 7 ngày cho ${selectedStaff.account.displayName}`);
-    setTimeout(() => setSuccessMsg(''), 4000);
+    try {
+      const workingHoursPayload = tempShifts.map((sh, idx) => ({
+        dayOfWeek: idx + 1,
+        startTime: sh === 'MORNING' ? '08:30:00' : sh === 'AFTERNOON' ? '14:00:00' : '09:00:00',
+        endTime: sh === 'MORNING' ? '14:30:00' : sh === 'AFTERNOON' ? '20:00:00' : '18:00:00',
+        isActive: sh !== 'OFF',
+      }));
+
+      await staffScheduleApi.updateWorkingHours(selectedStaff.id, workingHoursPayload);
+
+      setStaffSchedules((prev) => ({
+        ...prev,
+        [selectedStaff.id]: tempShifts,
+      }));
+
+      setShiftModalOpen(false);
+      setSuccessMsg(`Đã cập nhật ca làm việc 7 ngày cho ${selectedStaff.displayName}`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi cập nhật ca trực');
+    }
   };
 
-  const handleAddStaff = (e: React.FormEvent) => {
+  const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim() || !formEmail.trim()) return;
 
-    const newId = `acc-stf-${Date.now()}`;
-    const newMember: StaffMember = {
-      account: {
-        id: newId,
-        roleId: 'r-therapist',
-        roleCode: 'THERAPIST',
-        email: formEmail || `${formCode.toLowerCase()}@lunara.vn`,
-        displayName: formName,
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-        isActive: true,
-      },
-      profile: {
-        accountId: newId,
-        employeeCode: formCode,
-        jobTitle: formTitle,
+    try {
+      if (!formServiceIds.length || !formDays.length) throw new Error('Chọn ít nhất một dịch vụ và một ca làm việc.');
+      await staffOnboardingApi.create({
+        name: formName.trim(),
+        email: formEmail.trim(),
+        jobTitle: formJobTitle.trim(),
         isBookable: true,
-        specialties: formSpecialties.split(',').map((s) => s.trim()),
-        status: 'Available',
-        todayBookings: 0,
-        utilizationRate: 0,
-      },
-    };
+        serviceIds: formServiceIds,
+        workingHours: formDays.map((dayOfWeek) => ({ dayOfWeek, startTime: '09:00:00', endTime: '18:00:00', isActive: true })),
+      });
 
-    setStaffList([...staffList, newMember]);
-    setStaffSchedules((prev) => ({
-      ...prev,
-      [newId]: ['FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'FULL_DAY', 'OFF', 'OFF'],
-    }));
+      await reloadStaff();
+      setAddModalOpen(false);
+      setSuccessMsg(`Đã thêm thành công kỹ thuật viên ${formName} vào hệ thống`);
+      setTimeout(() => setSuccessMsg(''), 4000);
 
-    setAddModalOpen(false);
-    setSuccessMsg(`Đã thêm thành công kỹ thuật viên ${formName} vào đội ngũ`);
-    setTimeout(() => setSuccessMsg(''), 4000);
-
-    // Reset Form
-    setFormName('');
-    setFormEmail('');
+      setFormName('');
+      setFormEmail('');
+      setFormServiceIds([]);
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi thêm kỹ thuật viên');
+    }
   };
+
+  const filteredStaff = staffList.filter((s) => {
+    if (filterTab === 'AVAILABLE') return s.isActive;
+    if (filterTab === 'WORKING') return s.isActive;
+    return true;
+  });
 
   return (
     <div className="space-y-6 font-body max-w-7xl mx-auto">
@@ -153,7 +191,7 @@ export const StaffPage: React.FC = () => {
             Quản lý kỹ thuật viên
           </h1>
           <p className="text-xs text-[#6B726C] mt-1">
-            Đội ngũ chuyên viên trị liệu & điều phối lịch trực ({staffList.length} nhân sự)
+            Đội ngũ chuyên viên trị liệu & điều phối ca làm việc ({staffList.length} nhân sự)
           </p>
         </div>
 
@@ -179,295 +217,297 @@ export const StaffPage: React.FC = () => {
           onChange={(key) => setFilterTab(key as any)}
           tabs={[
             { key: 'ALL', label: `Tất cả (${staffList.length})` },
-            { key: 'WORKING', label: `Làm việc hôm nay (${countWorking})` },
-            { key: 'AVAILABLE', label: `Đang rảnh (${countAvailable})` },
-            { key: 'LEAVE', label: `Nghỉ ca (${countLeave})` },
+            { key: 'WORKING', label: `Đang làm việc (${staffList.filter((s) => s.isActive).length})` },
+            { key: 'AVAILABLE', label: `Sẵn sàng (${staffList.filter((s) => s.isActive).length})` },
           ]}
         />
       </div>
 
       {/* Staff Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredStaff.map((staff) => {
-          const isAvailable = staff.profile.status === 'Available';
-          const isOff = staff.profile.status === 'Day off';
+      {loading ? (
+        <div className="text-center py-16 text-xs text-[#8EAA97]">Đang tải danh sách kỹ thuật viên từ database...</div>
+      ) : staffList.length === 0 ? (
+        <div className="text-center py-16 text-xs text-[#8EAA97]">Chưa có kỹ thuật viên nào trong hệ thống</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredStaff.map((staff) => {
+            const shifts = staffSchedules[staff.id] || Array(7).fill('OFF');
 
-          return (
-            <TiltCard key={staff.account.id} maxTilt={6} cardClassName="rounded-2xl">
-              <Card
-                onClick={() => handleOpenDetail(staff)}
-                className="h-full p-6 border border-[#E2E8E3] shadow-luxury hover:shadow-luxury-hover transition-all cursor-pointer space-y-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={staff.account.avatarUrl}
-                      alt={staff.account.displayName}
-                      className="h-12 w-12 rounded-full object-cover border border-[#D9E5DC]"
-                    />
-                    <div>
-                      <h3 className="font-display font-semibold text-base text-[#14271C]">
-                        {staff.account.displayName}
-                      </h3>
-                      <p className="text-xs text-[#8EAA97]">{staff.profile.jobTitle}</p>
+            return (
+              <TiltCard key={staff.id} maxTilt={6} cardClassName="rounded-2xl">
+                <Card
+                  onClick={() => handleOpenDetail(staff)}
+                  className="h-full p-6 border border-[#E2E8E3] shadow-luxury hover:shadow-luxury-hover transition-all cursor-pointer space-y-4"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-2xl bg-[#E8F5E9] text-[#1E3B2B] flex items-center justify-center font-display font-bold text-lg">
+                        {staff.displayName.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-display font-semibold text-base text-[#14271C]">
+                          {staff.displayName}
+                        </h3>
+                        <p className="text-[11px] text-[#8EAA97]">
+                          Kỹ thuật viên trị liệu · #{staff.id}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Badge variant={staff.isActive ? 'success' : 'outline'}>
+                      {staff.isActive ? '● Đang hoạt động' : '○ Tạm nghỉ'}
+                    </Badge>
+                  </div>
+
+                  <div className="pt-3 border-t border-[#E2E8E3] space-y-2 text-xs text-[#526056]">
+                    <div className="flex justify-between">
+                      <span className="text-[#8EAA97]">Email:</span>
+                      <span className="truncate max-w-[180px]">{staff.email}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#8EAA97]">Lịch trực tuần này:</span>
+                      <span className="font-semibold text-[#1E3B2B]">
+                        {shifts.filter((s) => s !== 'OFF').length} / 7 ca
+                      </span>
                     </div>
                   </div>
 
-                  <Badge
-                    variant={isAvailable ? 'success' : isOff ? 'outline' : 'warning'}
-                  >
-                    {isAvailable ? '● Đang rảnh' : isOff ? '○ Nghỉ ca' : '● Đang phục vụ'}
-                  </Badge>
-                </div>
-
-                {/* Specialties */}
-                <div className="flex flex-wrap gap-1.5">
-                  {staff.profile.specialties.map((spec, i) => (
-                    <span
-                      key={i}
-                      className="rounded-full bg-[#F8F9F5] border border-[#E2E8E3] px-2.5 py-0.5 text-[10px] font-medium text-[#526056]"
+                  <div className="pt-2 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenShiftEdit(staff);
+                      }}
+                      className="w-full text-xs h-8 rounded-xl border-[#D9E5DC] text-[#1E3B2B] hover:border-[#1E3B2B] cursor-pointer"
                     >
-                      {spec}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Utilization Rate */}
-                <div className="space-y-1.5 pt-2 border-t border-[#E2E8E3]">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-[#526056]">Hiệu suất ca</span>
-                    <span className="text-[#1E3B2B]">{staff.profile.utilizationRate}%</span>
+                      <Calendar className="h-3.5 w-3.5 mr-1" />
+                      Phân ca 7 ngày
+                    </Button>
                   </div>
-                  <Progress value={staff.profile.utilizationRate} />
-                  <div className="flex justify-between text-[11px] text-[#8EAA97]">
-                    <span>{staff.profile.todayBookings} ca đã nhận</span>
-                    <span>Mã NV: {staff.profile.employeeCode}</span>
-                  </div>
-                </div>
-              </Card>
-            </TiltCard>
-          );
-        })}
-      </div>
+                </Card>
+              </TiltCard>
+            );
+          })}
+        </div>
+      )}
 
       {/* Staff Detail Sheet */}
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
         {selectedStaff && (
-          <div className="space-y-6">
-            <SheetHeader>
-              <div className="flex items-center justify-between">
-                <SheetTitle>Hồ sơ kỹ thuật viên</SheetTitle>
-                <SheetClose onClick={() => setDetailOpen(false)} />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white p-6 shadow-2xl border-l border-[#E2E8E3] overflow-y-auto space-y-6 font-body animate-in slide-in-from-right duration-200">
+            <SheetHeader className="flex flex-row items-center justify-between pb-4 border-b border-[#E2E8E3]">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-[#E8F5E9] text-[#1E3B2B] flex items-center justify-center font-display font-bold text-lg">
+                  {selectedStaff.displayName.charAt(0)}
+                </div>
+                <div>
+                  <SheetTitle className="font-display text-xl text-[#14271C]">
+                    {selectedStaff.displayName}
+                  </SheetTitle>
+                  <p className="text-xs text-[#8EAA97]">Kỹ thuật viên #{selectedStaff.id}</p>
+                </div>
               </div>
+              <SheetClose asChild>
+                <button type="button" className="p-1 text-[#8EAA97] hover:text-[#14271C]">
+                  <X className="h-5 w-5" />
+                </button>
+              </SheetClose>
             </SheetHeader>
 
-            <div className="flex items-center gap-4 pb-4 border-b border-[#E2E8E3]">
-              <img
-                src={selectedStaff.account.avatarUrl}
-                alt={selectedStaff.account.displayName}
-                className="h-16 w-16 rounded-2xl object-cover border border-[#D9E5DC]"
-              />
-              <div>
-                <h3 className="font-display font-bold text-lg text-[#14271C]">
-                  {selectedStaff.account.displayName}
-                </h3>
-                <p className="text-xs text-[#8EAA97]">{selectedStaff.profile.jobTitle}</p>
-                <p className="text-xs text-[#526056]">{selectedStaff.account.email}</p>
-              </div>
-            </div>
-
-            {/* Weekly Working Schedule Table */}
-            <div className="space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold uppercase tracking-wider text-[#8EAA97]">
-                  Lịch làm việc trong tuần (Thứ 2 — CN)
-                </span>
-                <button
-                  onClick={handleOpenShiftModal}
-                  className="text-xs font-semibold text-[#1E3B2B] hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <Edit2 className="h-3.5 w-3.5" /> Sửa ca
-                </button>
+            <div className="space-y-4 text-xs">
+              <div className="p-4 rounded-2xl bg-[#FAFBF9] border border-[#E2E8E3] space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Email:</span>
+                  <span className="font-semibold text-[#14271C]">{selectedStaff.email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Vai trò hệ thống:</span>
+                  <span className="font-semibold text-[#1E3B2B]">{selectedStaff.role}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Trạng thái:</span>
+                  <Badge variant={selectedStaff.isActive ? 'success' : 'outline'}>
+                    {selectedStaff.isActive ? '● Đang làm việc' : '○ Tạm khóa'}
+                  </Badge>
+                </div>
               </div>
 
-              <div className="divide-y divide-[#E2E8E3] rounded-xl border border-[#E2E8E3] overflow-hidden bg-white">
-                {DAYS_OF_WEEK.map((day, idx) => {
-                  const schedule = staffSchedules[selectedStaff.account.id] || [];
-                  const shiftType = schedule[idx] || 'FULL_DAY';
-                  const isOff = shiftType === 'OFF';
+              {/* Schedule display */}
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-[#14271C]">Ca trực các ngày trong tuần</Label>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleOpenShiftEdit(selectedStaff)}
+                    className="h-7 text-xs text-[#1E3B2B] hover:bg-[#E8F0EA] cursor-pointer"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 mr-1" />
+                    Chỉnh sửa
+                  </Button>
+                </div>
 
-                  return (
-                    <div key={day} className="flex justify-between items-center p-3 text-xs">
-                      <span className="font-medium text-[#14271C]">{day}</span>
-                      <span
-                        className={`font-semibold ${
-                          isOff ? 'text-[#D32F2F]' : 'text-[#2E7D32]'
-                        }`}
-                      >
-                        {SHIFT_LABELS[shiftType]}
-                      </span>
-                    </div>
-                  );
-                })}
+                <div className="divide-y divide-[#E2E8E3] border border-[#E2E8E3] rounded-2xl overflow-hidden bg-white">
+                  {DAYS_OF_WEEK.map((day, idx) => {
+                    const shift = (staffSchedules[selectedStaff.id] || [])[idx] || 'OFF';
+                    return (
+                      <div key={day} className="p-3 flex items-center justify-between text-xs">
+                        <span className="font-medium text-[#14271C]">{day}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            shift === 'OFF'
+                              ? 'bg-[#FCE8E6] text-[#BA1A1A]'
+                              : 'bg-[#E8F5E9] text-[#2E7D32]'
+                          }`}
+                        >
+                          {SHIFT_LABELS[shift]}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-4 border-t border-[#E2E8E3] space-y-2">
-              <Button
-                onClick={handleOpenShiftModal}
-                className="w-full text-xs h-11 bg-[#1E3B2B] text-white hover:bg-[#14271C] font-semibold"
-              >
-                Cập nhật ca làm việc
-              </Button>
             </div>
           </div>
         )}
       </Sheet>
 
-      {/* Modal Cập Nhật Ca Làm Việc */}
+      {/* Shift Edit Modal */}
       <Dialog open={shiftModalOpen} onOpenChange={setShiftModalOpen}>
-        <div className="space-y-4">
-          <DialogHeader>
-            <DialogTitle>
-              Cập nhật ca làm việc: {selectedStaff?.account.displayName}
-            </DialogTitle>
-            <DialogDescription>
-              Cấu hình phân ca trực hoặc ngày nghỉ cho từng ngày trong tuần
-            </DialogDescription>
-          </DialogHeader>
+        {selectedStaff && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 font-body">
+            <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-luxury border border-[#E2E8E3] animate-in fade-in zoom-in-95 space-y-4">
+              <DialogHeader>
+                <DialogTitle className="font-display text-xl text-[#14271C]">
+                  Phân ca 7 ngày — {selectedStaff.displayName}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-[#6B726C]">
+                  Cấu hình ca sáng, ca chiều, cả ngày hoặc ngày nghỉ (Day Off).
+                </DialogDescription>
+              </DialogHeader>
 
-          <div className="space-y-2.5 text-xs max-h-96 overflow-y-auto pr-1">
-            {DAYS_OF_WEEK.map((day, idx) => (
-              <div
-                key={day}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-[#E2E8E3] bg-[#F8F9F5]"
-              >
-                <span className="font-semibold text-[#14271C] w-24">{day}</span>
-                <select
-                  value={tempShifts[idx] || 'FULL_DAY'}
-                  onChange={(e) => {
-                    const newShifts = [...tempShifts];
-                    newShifts[idx] = e.target.value as ShiftType;
-                    setTempShifts(newShifts);
-                  }}
-                  className="flex-1 h-9 px-3 rounded-lg border border-[#E2E8E3] bg-white text-xs font-medium text-[#14271C]"
-                >
-                  <option value="FULL_DAY">Cả ngày (09:00 — 18:00)</option>
-                  <option value="MORNING">Ca sáng (08:30 — 14:30)</option>
-                  <option value="AFTERNOON">Ca chiều (14:00 — 20:00)</option>
-                  <option value="OFF">NGHỈ CA (Day Off)</option>
-                </select>
+              <div className="space-y-3 my-2 max-h-[350px] overflow-y-auto pr-1">
+                {DAYS_OF_WEEK.map((day, idx) => (
+                  <div
+                    key={day}
+                    className="p-3 rounded-xl bg-[#FAFBF9] border border-[#E2E8E3] flex items-center justify-between gap-2"
+                  >
+                    <span className="text-xs font-semibold text-[#14271C] w-20">{day}</span>
+                    <div className="flex gap-1">
+                      {(['FULL_DAY', 'MORNING', 'AFTERNOON', 'OFF'] as ShiftType[]).map((sh) => (
+                        <button
+                          key={sh}
+                          type="button"
+                          onClick={() => handleShiftSelect(idx, sh)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                            tempShifts[idx] === sh
+                              ? 'bg-[#1E3B2B] text-white'
+                              : 'bg-white border border-[#E2E8E3] text-[#526056] hover:border-[#1E3B2B]'
+                          }`}
+                        >
+                          {sh === 'FULL_DAY' ? 'Cả ngày' : sh === 'MORNING' ? 'Sáng' : sh === 'AFTERNOON' ? 'Chiều' : 'Nghỉ'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShiftModalOpen(false)}
-              className="text-xs h-10"
-            >
-              Hủy
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSaveShifts}
-              className="bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs h-10 px-4 font-semibold"
-            >
-              Lưu ca làm việc
-            </Button>
-          </DialogFooter>
-        </div>
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShiftModalOpen(false)}
+                  className="rounded-xl text-xs"
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveShifts}
+                  className="rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold"
+                >
+                  Lưu lịch ca trực
+                </Button>
+              </DialogFooter>
+            </div>
+          </div>
+        )}
       </Dialog>
 
-      {/* Modal Thêm Chuyên Viên Mới */}
+      {/* Add Staff Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <form onSubmit={handleAddStaff} className="space-y-4">
-          <DialogHeader>
-            <DialogTitle>Thêm chuyên viên mới</DialogTitle>
-            <DialogDescription>
-              Đăng ký kỹ thuật viên mới vào hệ thống nhân sự Lunara Spa
-            </DialogDescription>
-          </DialogHeader>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 font-body">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-luxury border border-[#E2E8E3] animate-in fade-in zoom-in-95 space-y-4">
+            <DialogHeader>
+              <DialogTitle className="font-display text-xl text-[#14271C]">
+                Thêm chuyên viên trị liệu mới
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#6B726C]">
+                Khởi tạo tài khoản KTV và phân bổ vào đội ngũ trị liệu Lunara.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-3 text-xs">
-            <div className="space-y-1">
-              <Label>Họ và tên chuyên viên *</Label>
-              <Input
-                required
-                placeholder="Ví dụ: Hoàng Ngọc Yến"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                className="h-10 text-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleAddStaff} className="space-y-3.5 my-2">
               <div className="space-y-1">
-                <Label>Vị trí / Chức danh</Label>
-                <select
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl border border-[#E2E8E3] bg-white text-xs"
-                >
-                  <option value="Senior Therapist">Senior Therapist (KTV Cấp Cao)</option>
-                  <option value="Facial Specialist">Facial Specialist (Chuyên Da Mặt)</option>
-                  <option value="Therapist">Therapist (Kỹ Thuật Viên)</option>
-                  <option value="Junior Therapist">Junior Therapist (KTV Tập Sự)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Mã nhân viên</Label>
+                <Label className="text-xs">Họ và tên chuyên viên *</Label>
                 <Input
-                  value={formCode}
-                  onChange={(e) => setFormCode(e.target.value)}
-                  className="h-10 text-xs font-mono"
+                  placeholder="VD: Lê Thị Hồng..."
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  required
                 />
               </div>
-            </div>
 
-            <div className="space-y-1">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                placeholder="chuyenvien@lunara.vn"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                className="h-10 text-xs"
-              />
-            </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Email công việc *</Label>
+                <Input
+                  type="email"
+                  placeholder="hong.le@lunara.vn"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  required
+                />
+              </div>
 
-            <div className="space-y-1">
-              <Label>Chuyên môn chính (cách nhau bởi dấu phẩy)</Label>
-              <Input
-                placeholder="Massage, Chăm Sóc Da, Đá Nóng Himalaya"
-                value={formSpecialties}
-                onChange={(e) => setFormSpecialties(e.target.value)}
-                className="h-10 text-xs"
-              />
-            </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Chức danh *</Label>
+                <Input value={formJobTitle} onChange={(e) => setFormJobTitle(e.target.value)} required />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Dịch vụ có thể thực hiện *</Label>
+                <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
+                  {services.map((service) => <label key={service.id} className="text-xs flex gap-2 items-center"><input type="checkbox" checked={formServiceIds.includes(Number(service.id))} onChange={() => setFormServiceIds((current) => current.includes(Number(service.id)) ? current.filter((id) => id !== Number(service.id)) : [...current, Number(service.id)])} />{service.name}</label>)}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Ngày làm việc (09:00–18:00) *</Label>
+                <div className="flex flex-wrap gap-3">{DAYS_OF_WEEK.map((day, index) => <label key={day} className="text-xs flex gap-1 items-center"><input type="checkbox" checked={formDays.includes(index + 1)} onChange={() => setFormDays((current) => current.includes(index + 1) ? current.filter((value) => value !== index + 1) : [...current, index + 1])} />{day}</label>)}</div>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddModalOpen(false)}
+                  className="rounded-xl text-xs"
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="submit"
+                  className="rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold"
+                >
+                  Thêm vào đội ngũ
+                </Button>
+              </DialogFooter>
+            </form>
           </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setAddModalOpen(false)}
-              className="text-xs h-10"
-            >
-              Hủy
-            </Button>
-            <Button
-              type="submit"
-              className="bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs h-10 px-4 font-semibold"
-            >
-              Xác nhận thêm
-            </Button>
-          </DialogFooter>
-        </form>
+        </div>
       </Dialog>
     </div>
   );
