@@ -6,6 +6,10 @@ import java.util.Map;
 import java.util.Set;
 import lombok.Getter;
 
+/**
+ * DTO nhận dữ liệu yêu cầu cập nhật hồ sơ cá nhân khách hàng (Customer Profile).
+ * Chỉ cho phép cập nhật displayName, phone và preferences.
+ */
 @Getter
 public class ProfileUpdateRequest {
     private String displayName;
