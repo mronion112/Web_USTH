@@ -1,0 +1,5 @@
+account_id,employee_code,job_title,is_bookable,created_at,updated_at
+4,LNR-TH-001,Therapist,1,2026-04-26 14:47:00,2026-07-14 14:47:00
+5,LNR-TH-002,Senior Therapist,1,2026-04-25 14:47:00,2026-07-03 14:47:00
+6,LNR-TH-003,Facial Specialist,1,2026-05-13 14:47:00,2026-07-29 14:47:00
+7,LNR-TH-004,Therapist,1,2026-05-01 14:47:00,2026-07-04 14:47:00
