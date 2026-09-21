@@ -3,6 +3,10 @@ package com.kevin.lunaraspa.profiles.dto;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * DTO đóng gói thông tin hồ sơ người dùng trả về cho client.
+ * Bao gồm thông tin cơ bản của Account cùng trường thông tin tương ứng theo Role (Customer hoặc Staff).
+ */
 @Data
 @Builder
 public class ProfileResponseDTO {
