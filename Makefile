@@ -22,10 +22,10 @@ BASELINE ?= origin/main
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động MySQL + Redis"
+	@echo "  up           Khởi động MySQL + Redis + Kafka"
 	@echo "  chroma       Khởi động và kiểm tra Chroma DB"
 	@echo "  check-chroma Kiểm tra Chroma API heartbeat"
-	@echo "  up-app       Khởi động full stack (MySQL, Redis, Chroma, backend, frontend)"
+	@echo "  up-app       Khởi động full stack (MySQL, Redis, Kafka, Chroma, backend, frontend)"
 	@echo "  test         Khởi động hạ tầng + nạp dataset Testing + chạy backend tests"
 	@echo "  demo         Khởi động hạ tầng + nạp dataset Production + chạy full stack"
 	@echo "  down         Dừng stack local (giữ data trong volume)"
@@ -49,7 +49,7 @@ check-env:
 	if [ -n "$$missing" ]; then echo "Thiếu biến trong $(ENV_FILE):$$missing" >&2; exit 1; fi
 
 up: check-env
-	$(COMPOSE) up -d --wait db redis
+	$(COMPOSE) up -d --wait db redis kafka
 
 chroma:
 	$(COMPOSE) up -d chroma
