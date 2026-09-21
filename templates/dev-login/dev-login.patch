@@ -141,70 +141,74 @@ index 0000000..f461d41
 +        return normalized;
 +    }
 +}
-diff --git a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java
-index 31d782a..4294167 100644
---- a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java
-+++ b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java
-@@ -29,6 +29,7 @@ public class SecurityConfig {
-     @Bean
-     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-             @Value("${springdoc.api-docs.enabled:false}") boolean openApiEnabled,
-+            @Value("${app.dev-login.enabled:false}") boolean devLoginEnabled,
-             @Value("${app.frontend-url}") String frontendUrl,
-             ClientRegistrationRepository clientRegistrationRepository) throws Exception {
-         http
-@@ -46,6 +47,10 @@ public class SecurityConfig {
-                     auth.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
-                             "/v3/api-docs.yaml", "/v3/api-docs/**").permitAll();
-                 }
-+                if (devLoginEnabled) {
-+                    // Chỉ mở ở local/dev; mặc định tắt nên production không có đường này.
-+                    auth.requestMatchers("/dev/**").permitAll();
-+                }
-                 auth.requestMatchers("/api/auth/me", "/api/v1/auth/me").authenticated()
-                         .anyRequest().access(customAuthorizationManager);
-             })
+diff --git a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java
+new file mode 100644
+index 0000000..4c77484
+--- /dev/null
++++ b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java
+@@ -0,0 +1,35 @@
++package com.kevin.lunaraspa.authentication_account;
++
++import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++import org.springframework.core.annotation.Order;
++import org.springframework.security.config.Customizer;
++import org.springframework.security.config.annotation.web.builders.HttpSecurity;
++import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
++import org.springframework.security.config.http.SessionCreationPolicy;
++import org.springframework.security.web.SecurityFilterChain;
++
++/**
++ * Mở riêng đường dẫn {@code /dev/**} cho dev-login.
++ *
++ * <p>Chỉ tồn tại khi {@code app.dev-login.enabled=true}, nên production không có
++ * đường này. Tách chain riêng thay vì sửa SecurityConfig để patch dev-login
++ * không phải đụng vào file authz trung tâm.
++ */
++@Configuration
++@ConditionalOnProperty(prefix = "app.dev-login", name = "enabled", havingValue = "true")
++// DEV_LOGIN_PATCH_MARKER: file này chỉ tồn tại khi áp patch dev-login. Không commit vào main.
++public class DevSecurityConfig {
++
++    @Bean
++    @Order(-1)
++    SecurityFilterChain devSecurityFilterChain(HttpSecurity http) throws Exception {
++        return http.securityMatcher("/dev/**")
++                .csrf(AbstractHttpConfigurer::disable)
++                .cors(Customizer.withDefaults())
++                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
++                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
++                .build();
++    }
++}
 diff --git a/backend/src/main/resources/application.yml b/backend/src/main/resources/application.yml
-index b13bdb4..a9ade8e 100644
+index 030a882..91a126a 100644
 --- a/backend/src/main/resources/application.yml
 +++ b/backend/src/main/resources/application.yml
-@@ -61,6 +61,9 @@ springdoc:
- 
- app:
+@@ -60,2 +60,5 @@ app:
    frontend-url: ${FRONTEND_URL}
 +  # Đăng nhập giả cho local/dev, mặc định tắt. Không bật ngoài local.
 +  dev-login:
 +    enabled: ${APP_DEV_LOGIN_ENABLED:false}
    mail:
-     enabled: ${MAIL_ENABLED:false}
-     from: ${MAIL_FROM:${MAIL_USERNAME:}}
 diff --git a/frontend/lunara/src/App.tsx b/frontend/lunara/src/App.tsx
-index f24f494..dd39a14 100644
+index 4f1d63a..999d12a 100644
 --- a/frontend/lunara/src/App.tsx
 +++ b/frontend/lunara/src/App.tsx
-@@ -16,6 +16,7 @@ const BookingPage = page(() => import('@/pages/BookingPage'), 'BookingPage');
- const CheckoutPage = page(() => import('@/pages/CheckoutPage'), 'CheckoutPage');
- const TicketPage = page(() => import('@/pages/TicketPage'), 'TicketPage');
+@@ -19,2 +19,3 @@ const MyBookingsPage = page(() => import('@/pages/MyBookingsPage'), 'MyBookingsP
  const AdminLoginPage = page(() => import('@/pages/admin/AdminLoginPage'), 'AdminLoginPage');
 +const DevLoginPage = page(() => import('@/pages/DevLoginPage'), 'DevLoginPage');
  const AdminLayout = page(() => import('@/components/layout/AdminLayout'), 'AdminLayout');
- const DashboardPage = page(() => import('@/pages/admin/DashboardPage'), 'DashboardPage');
- const LivePage = page(() => import('@/pages/admin/LivePage'), 'LivePage');
-@@ -55,6 +56,7 @@ function App() {
-             <Route path="/" element={<LandingPage />} />
-             <Route path="/auth" element={<AuthPage />} />
+@@ -58,2 +59,3 @@ function App() {
              <Route path="/oauth2/redirect" element={<OAuth2RedirectPage />} />
 +            <Route path="/dev-login" element={<DevLoginPage />} />
              <Route path="/booking" element={<BookingPage />} />
-             <Route path="/checkout" element={<CheckoutPage />} />
-             <Route path="/ticket/:id" element={<TicketPage />} />
 diff --git a/frontend/lunara/src/lib/api.ts b/frontend/lunara/src/lib/api.ts
-index 1db734d..1a2f0b8 100644
+index beb648b..ee4468a 100644
 --- a/frontend/lunara/src/lib/api.ts
 +++ b/frontend/lunara/src/lib/api.ts
-@@ -93,6 +93,31 @@ export function setStoredRefreshToken(token: string | null): void {
-   setCookie(REFRESH_TOKEN_KEY, token, 30);
- }
+@@ -95,2 +95,27 @@ export function setStoredRefreshToken(token: string | null): void {
  
 +export interface DevLoginResult {
 +  accessToken: string;
@@ -232,8 +236,6 @@ index 1db734d..1a2f0b8 100644
 +}
 +
  function clearStoredTokens(): void {
-   setStoredToken(null);
-   setStoredRefreshToken(null);
 diff --git a/frontend/lunara/src/pages/DevLoginPage.tsx b/frontend/lunara/src/pages/DevLoginPage.tsx
 new file mode 100644
 index 0000000..59286fd
@@ -332,9 +334,7 @@ diff --git a/frontend/lunara/src/pages/admin/AdminLoginPage.tsx b/frontend/lunar
 index 17f045b..cfc0c4e 100644
 --- a/frontend/lunara/src/pages/admin/AdminLoginPage.tsx
 +++ b/frontend/lunara/src/pages/admin/AdminLoginPage.tsx
-@@ -85,6 +85,12 @@ export const AdminLoginPage = () => {
-           Đăng nhập với Google <ArrowRight className="h-4 w-4 ml-2" />
-         </Button>
+@@ -87,2 +87,8 @@ export const AdminLoginPage = () => {
  
 +        {import.meta.env.VITE_DEV_LOGIN === 'true' && (
 +          <Link to="/dev-login" className="block text-xs text-[#8EAA97] hover:underline">
@@ -343,15 +343,11 @@ index 17f045b..cfc0c4e 100644
 +        )}
 +
          <Link to="/" className="block text-xs text-[#8EAA97] hover:underline">← Quay lại trang chủ</Link>
-       </div>
-     </div>
 diff --git a/templates/.env.example b/templates/.env.example
 index b7846b0..75ee030 100644
 --- a/templates/.env.example
 +++ b/templates/.env.example
-@@ -51,6 +51,13 @@ CHROMA_STARTUP_INDEXING=false
- CHROMA_UPSERT_BATCH_SIZE=100
- FRONTEND_URL=http://localhost:5173
+@@ -53,2 +53,7 @@ FRONTEND_URL=http://localhost:5173
  
 +# Đăng nhập giả cho local/dev. Mặc định tắt; đặt true để test luồng cần quyền
 +# mà không cần Google. TUYỆT ĐỐI không bật ở production: endpoint /dev/auth/login
@@ -359,7 +355,7 @@ index b7846b0..75ee030 100644
 +APP_DEV_LOGIN_ENABLED=false
 +
  # --- Frontend React (service: frontend) ---
- FRONTEND_PORT=5173
+@@ -56 +61,3 @@ FRONTEND_PORT=5173
  VITE_API_URL=http://localhost:8080
 +# Hiện form đăng nhập giả trên UI. Mặc định tắt; chốt lúc build, đổi thì build lại.
 +VITE_DEV_LOGIN=false
@@ -367,33 +363,21 @@ diff --git a/templates/Dockerfile.frontend b/templates/Dockerfile.frontend
 index a9777ae..059a975 100644
 --- a/templates/Dockerfile.frontend
 +++ b/templates/Dockerfile.frontend
-@@ -10,7 +10,9 @@
- FROM node:22-alpine AS build
- WORKDIR /workspace
+@@ -12,3 +12,5 @@ WORKDIR /workspace
  ARG VITE_API_URL=http://localhost:8080
 +ARG VITE_DEV_LOGIN=false
  ENV VITE_API_URL=$VITE_API_URL
 +ENV VITE_DEV_LOGIN=$VITE_DEV_LOGIN
  COPY frontend/lunara/package.json frontend/lunara/package-lock.json frontend/lunara/
- RUN cd frontend/lunara && npm ci
- COPY frontend/lunara frontend/lunara/
 diff --git a/templates/docker-compose.yml b/templates/docker-compose.yml
 index 6edf11b..2456d6e 100644
 --- a/templates/docker-compose.yml
 +++ b/templates/docker-compose.yml
-@@ -130,6 +130,7 @@ services:
-       CHROMA_STARTUP_INDEXING: ${CHROMA_STARTUP_INDEXING:-false}
-       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+@@ -132,2 +132,3 @@ services:
        KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-lunara-api}
 +      APP_DEV_LOGIN_ENABLED: ${APP_DEV_LOGIN_ENABLED:-false}
      depends_on:
-       db:
-         condition: service_healthy
-@@ -148,6 +149,7 @@ services:
-       dockerfile: templates/Dockerfile.frontend
-       args:
+@@ -150,2 +151,3 @@ services:
          VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
 +        VITE_DEV_LOGIN: ${VITE_DEV_LOGIN:-false}
      ports:
-       - "${FRONTEND_PORT:-5173}:80"
-     depends_on:
