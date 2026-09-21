@@ -18,6 +18,7 @@ Lenh nay DROP lunara_spa roi nap lai tu CSV v1.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -41,11 +42,19 @@ def load_env() -> dict[str, str]:
         if "=" in line and not line.strip().startswith("#"):
             key, _, value = line.partition("=")
             values[key.strip()] = value.strip()
+    for key in ("DB_HOST", "DB_PORT", "DB_USER", "MYSQL_ROOT_PASSWORD"):
+        if os.environ.get(key):
+            values[key] = os.environ[key]
     return values
 
 
 def mysql(args: list[str], env: dict[str, str], *, input_sql: str | None = None, local_infile: bool = False, check: bool = True):
-    command = ["mysql", "-h", "127.0.0.1", "-P", env["DB_PORT"], "-u", "root"]
+    command = [
+        "mysql",
+        "-h", env.get("DB_HOST", "127.0.0.1"),
+        "-P", env["DB_PORT"],
+        "-u", env.get("DB_USER", "root"),
+    ]
     if local_infile or input_sql is not None and "LOAD DATA" in (input_sql or ""):
         command.append("--local-infile=1")
     result = subprocess.run(

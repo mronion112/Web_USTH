@@ -38,6 +38,7 @@ database/v1/
 
 Định dạng CSV giữ nguyên như pipeline hiện tại (`IMPORT_ORDER.txt`, header, CRLF, UTF-8, NULL là `\N`),
 nên có thể nạp bằng đúng câu `LOAD DATA LOCAL INFILE` mà `Makefile` đang dùng.
+Bảng vận hành `sepay_transactions` do Flyway tạo và được để trống khi nạp dataset; vì vậy v1 vẫn chỉ có 15 file CSV.
 
 ## 3. Cách dùng
 
@@ -96,5 +97,4 @@ Phân bố trạng thái, phương thức thanh toán và rating của từng da
   Lưu ý `Makefile` và `.github/` nằm trong `INFRA_PATHS` nên thay đổi cần reviewer xác nhận.
 - Chưa đồng bộ tài liệu tham chiếu mã cụ thể (booking code, email) trong `database/README.md`,
   vì v1 sinh id và mã khác.
-- `backend/src/main/java/com/kevin/lunaraspa/payment/Guide.md:140` ghi thanh toán xong chuyển sang `PENDING`,
-  trong khi code chuyển sang `CONFIRMED`. v1 đi theo **code**; nên sửa Guide cho khớp.
+- Dataset không sinh lịch sử webhook SePay; các bản ghi này chỉ được tạo từ giao dịch runtime.
