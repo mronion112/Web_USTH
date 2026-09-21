@@ -23,6 +23,20 @@ Quy trình chỉ 2 lệnh make, không phức tạp. Guard tự chặn nếu qu�
   `VITE_DEV_LOGIN=true`.
 - Hai file mới mang marker `DEV_LOGIN_PATCH_MARKER` để guard nhận diện.
 
+## Sau khi áp patch có tự chạy không?
+
+Không. Patch chỉ sửa mã nguồn + config mẫu, không tự có hiệu lực. Bắt buộc build/khởi động lại:
+
+- Docker (khuyến nghị): `make up-app`. Lệnh `make dev-login-on` đã bao gồm bước này.
+- Backend chạy bằng `spring-boot:run`/IDE: dừng và chạy lại để biên dịch lại (có file Java mới).
+- Frontend chạy `npm run dev`: tạo `frontend/lunara/.env.local` với `VITE_DEV_LOGIN=true`,
+  rồi khởi động lại dev server.
+
+Lý do: backend cần compile lại; `VITE_*` được Vite nhúng vào bundle **lúc build/start**,
+không đọc lại khi đang chạy. Vì vậy đổi cờ phải build lại, `make up-app` làm cả hai.
+
+Sau khi `make dev-login-off`, cũng nên `make up-app` để image không còn chứa endpoint dev.
+
 ## Guard chống push nhầm
 
 - CI job `dev-login-guard` chạy trên mọi push/PR: fail nếu thấy dấu vết patch
