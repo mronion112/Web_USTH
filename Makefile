@@ -192,6 +192,8 @@ if grep -qE "^$(1)=" $(ENV_FILE); then sed -i "s|^$(1)=.*|$(1)=$(2)|" $(ENV_FILE
 endef
 
 dev-login-on: dev-login-apply dev-login-env-on
+	@echo "Nạp mock dataset Testing để có roles/accounts..."
+	$(MAKE) --no-print-directory seed-test
 	@echo "Đang build lại full stack..."
 	$(MAKE) --no-print-directory up-app
 	@echo "Dev login bật. Mở http://localhost:5173/dev-login"

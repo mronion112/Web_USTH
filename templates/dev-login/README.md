@@ -6,12 +6,16 @@ mà không cần cấu hình Google OAuth. Không nằm trong code chính, chỉ
 ## TL;DR
 
 ```sh
-make dev-login-on    # áp patch + bật biến + build lại full stack
+make dev-login-on    # áp patch + bật biến + nạp dataset Testing + build lại full stack
 # mở http://localhost:5173/dev-login
 make dev-login-off   # gỡ patch + tắt biến + build lại full stack
 ```
 
 Quy trình chỉ 2 lệnh make, không phức tạp. Guard tự chặn nếu quên gỡ trước khi push.
+
+`make dev-login-on` nạp sẵn dataset `Testing` vì bảng `roles` là dữ liệu tham chiếu
+(`Web_DataBase_USTH.sql` chỉ có DDL). Không nạp thì dev-login báo `Required role not found`
+hoặc `Account not found`.
 
 ## Nội dung patch
 
@@ -48,7 +52,7 @@ Sau khi `make dev-login-off`, cũng nên `make up-app` để image không còn c
 
 | Lệnh                    | Việc làm                                                        |
 | ----------------------- | --------------------------------------------------------------- |
-| `make dev-login-on`     | Áp patch, set biến `true` trong `templates/.env`, chạy `up-app`   |
+| `make dev-login-on`     | Áp patch, set biến `true`, nạp dataset Testing, chạy `up-app`     |
 | `make dev-login-off`    | Gỡ patch, set biến `false`, chạy `up-app`                         |
 | `make dev-login-apply`  | Chỉ áp patch (idempotent)                                        |
 | `make dev-login-revert` | Chỉ gỡ patch (idempotent)                                        |

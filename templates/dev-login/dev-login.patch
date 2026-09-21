@@ -1,6 +1,6 @@
 diff --git a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java
 new file mode 100644
-index 0000000..ff8bea6
+index 0000000..f461d41
 --- /dev/null
 +++ b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java
 @@ -0,0 +1,137 @@
@@ -63,7 +63,7 @@ index 0000000..ff8bea6
 +        String roleCode = normalizeRole(request.get("roleCode"));
 +
 +        Role role = roleRepository.findByCode(roleCode)
-+                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
++                .orElseThrow(() -> new AppException(AuthErrorCode.ROLE_NOT_FOUND));
 +
 +        Account account = accountRepository.findByEmail(email)
 +                .map(existing -> updateRole(existing, role))
