@@ -13,9 +13,10 @@ import {
   ApiService,
   PublicStaff,
 } from '@/lib/api';
-import { Search, Plus, CheckCircle2, ChevronRight, X, UserCheck } from 'lucide-react';
+import { Search, Plus, CheckCircle2, ChevronRight, X, UserCheck, CalendarClock, Mail } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useRefresh } from '@/lib/use-refresh';
+import { latestBookingsQuery } from '@/lib/admin-booking-query';
 
 const STATUS_LABELS: Record<string, string> = {
   ALL: 'Tất cả trạng thái',
@@ -34,6 +35,12 @@ const STATUS_COLORS: Record<string, string> = {
   PENDING: '#E0A96D',
 };
 
+const currentLocalDateTime = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 export const BookingsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
@@ -45,6 +52,8 @@ export const BookingsPage: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [successMsg, setSuccessMsg] = useState('');
   const [error, setError] = useState('');
 
@@ -59,25 +68,25 @@ export const BookingsPage: React.FC = () => {
 
   // Selected assign staff state
   const [assignStaffId, setAssignStaffId] = useState<number | ''>('');
+  const [rescheduleStart, setRescheduleStart] = useState('');
+  const [rescheduleStaffId, setRescheduleStaffId] = useState<number | ''>('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   const reload = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await bookingsApi.search({
-        code: search.trim() || undefined,
-        status: statusFilter,
-        size: 50,
-      }, signal);
+      const res = await bookingsApi.search(latestBookingsQuery({ search, status: statusFilter, page }), signal);
       if (res && Array.isArray(res.content)) {
         setBookings(res.content);
+        setTotalPages(Math.max(1, res.totalPages));
       }
     } catch (err: any) {
       console.error('Failed to load bookings:', err);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [search, statusFilter, page]);
 
-  useRefresh('booking', reload);
+  useRefresh('booking', reload, true, `${search}|${statusFilter}|${page}`);
 
   useEffect(() => {
     servicesApi.getAll().then((data) => {
@@ -133,8 +142,54 @@ export const BookingsPage: React.FC = () => {
   const handleOpenDetail = (b: ApiBookingSearch) => {
     setSelectedBooking(b);
     setAssignStaffId(b.staffAccountId || '');
+    setRescheduleStart(b.bookingStart.slice(0, 16));
+    setRescheduleStaffId(b.staffAccountId || '');
     setDetailOpen(true);
     setError('');
+  };
+
+  const handleReschedule = async () => {
+    if (!selectedBooking || !rescheduleStart) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      const requested = rescheduleStart.length === 16 ? `${rescheduleStart}:00` : rescheduleStart;
+      const updated = await bookingsApi.managerReschedule(
+        selectedBooking.id,
+        requested,
+        rescheduleStaffId ? Number(rescheduleStaffId) : undefined,
+      );
+      const staffObj = staffList.find((item) => Number(item.accountId) === Number(updated.staffAccountId));
+      setSelectedBooking({
+        ...selectedBooking,
+        bookingStart: updated.bookingStart,
+        bookingEnd: updated.bookingEnd,
+        staffAccountId: updated.staffAccountId,
+        staffName: staffObj?.displayName || selectedBooking.staffName,
+      });
+      setSuccessMsg(`Đã đổi lịch ${selectedBooking.bookingCode}; email cập nhật đang được gửi tới khách.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      await reload();
+    } catch (err: any) {
+      setError(err.message || 'Không thể đổi lịch hẹn');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!selectedBooking) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      await bookingsApi.resendEmail(selectedBooking.id);
+      setSuccessMsg(`Đã xếp hàng gửi lại email xác nhận cho ${selectedBooking.bookingCode}.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Không thể gửi lại email xác nhận');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleCheckIn = async () => {
@@ -175,6 +230,11 @@ export const BookingsPage: React.FC = () => {
     const matchStatus = statusFilter === 'ALL' || b.status === statusFilter;
     return matchSearch && matchStatus;
   });
+  const selectedStaffId = selectedBooking?.staffAccountId ?? null;
+  const requestedStaffId = rescheduleStaffId ? Number(rescheduleStaffId) : selectedStaffId;
+  const rescheduleUnchanged = Boolean(selectedBooking)
+    && rescheduleStart === selectedBooking?.bookingStart.slice(0, 16)
+    && requestedStaffId === selectedStaffId;
 
   return (
     <div className="space-y-6 font-body max-w-7xl mx-auto">
@@ -211,7 +271,10 @@ export const BookingsPage: React.FC = () => {
           <Input
             placeholder="Tìm theo mã vé hoặc tên khách..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             className="pl-9 h-10 text-xs rounded-xl bg-white border-[#E2E8E3]"
           />
         </div>
@@ -220,7 +283,10 @@ export const BookingsPage: React.FC = () => {
           {Object.entries(STATUS_LABELS).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setStatusFilter(key)}
+              onClick={() => {
+                setStatusFilter(key);
+                setPage(0);
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 statusFilter === key
                   ? 'bg-[#1E3B2B] text-white'
@@ -314,6 +380,17 @@ export const BookingsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <div className="flex items-center justify-between border-t border-[#E2E8E3] px-6 py-3 text-xs text-[#526056]">
+          <span>Trang {page + 1}/{totalPages}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
+              Trang trước
+            </Button>
+            <Button variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>
+              Trang sau
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {/* Booking Detail Sheet */}
@@ -403,6 +480,49 @@ export const BookingsPage: React.FC = () => {
                       Gán KTV
                     </Button>
                   </div>
+                </div>
+
+                <div className="pt-3 border-t border-[#E2E8E3] space-y-2">
+                  <Label className="text-xs font-semibold text-[#14271C]">Đổi lịch hẹn</Label>
+                  <Input
+                    type="datetime-local"
+                    value={rescheduleStart}
+                    min={currentLocalDateTime()}
+                    onChange={(event) => setRescheduleStart(event.target.value)}
+                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                  />
+                  <select
+                    value={rescheduleStaffId}
+                    onChange={(event) => setRescheduleStaffId(Number(event.target.value) || '')}
+                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                    className="w-full h-10 px-3 text-xs bg-white border border-[#E2E8E3] rounded-xl focus:ring-[#1E3B2B]"
+                  >
+                    <option value="">Giữ KTV hiện tại / tự động phân công</option>
+                    {staffList.map((staff) => (
+                      <option key={staff.accountId} value={staff.accountId}>{staff.displayName}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    onClick={handleReschedule}
+                    disabled={!rescheduleStart || rescheduleUnchanged || actionLoading || ['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                    className="w-full h-10 text-xs rounded-xl text-[#1E3B2B] border-[#D9E5DC] hover:border-[#1E3B2B]"
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    Cập nhật lịch và gửi email
+                  </Button>
+                </div>
+
+                <div className="pt-3 border-t border-[#E2E8E3]">
+                  <Button
+                    variant="outline"
+                    onClick={handleResendEmail}
+                    disabled={actionLoading}
+                    className="w-full h-10 text-xs rounded-xl text-[#1E3B2B] border-[#D9E5DC] hover:border-[#1E3B2B]"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Gửi lại email xác nhận
+                  </Button>
                 </div>
               </div>
             </div>

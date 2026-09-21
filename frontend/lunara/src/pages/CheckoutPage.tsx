@@ -47,7 +47,7 @@ export const CheckoutPage: React.FC = () => {
   const formatCountdown = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   const copyBankInfo = async () => {
     if (!payment) return;
-    await navigator.clipboard.writeText(payment.qrPayload || payment.transactionCode);
+    await navigator.clipboard.writeText(payment.transactionCode);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
@@ -77,16 +77,24 @@ export const CheckoutPage: React.FC = () => {
             <span className="font-semibold text-sm text-[#526056]">Tổng thanh toán</span>
             <span className="font-display text-2xl font-bold text-[#14271C]">{Number(booking.totalAmount).toLocaleString('vi-VN')} đ</span>
           </div>
-          {payment?.status === 'UNPAID' && booking.status === 'PENDING_PAYMENT' && remaining > 0 ? <>
+          {payment?.status === 'UNPAID' && booking.status === 'PENDING_PAYMENT' ? <>
             <div className="relative mx-auto flex flex-col items-center rounded-2xl bg-[#F8F9F5] p-6 border border-[#E2E8E3]">
-              {payment.qrPayload && <QRCodeSVG value={payment.qrPayload} size={208} level="M" aria-label="Mã QR thanh toán nội bộ Lunara" className="rounded-xl bg-white p-2" />}
-              <div className="mt-4 flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 border border-[#D9E5DC] text-xs font-semibold text-[#1E3B2B]"><Clock className="h-3.5 w-3.5" />Còn {formatCountdown(remaining)}</div>
+              {payment.qrPayload && <QRCodeSVG value={payment.qrPayload} size={208} level="M" aria-label="Mã VietQR thanh toán Lunara" className="rounded-xl bg-white p-2" />}
+              {remaining > 0 ? (
+                <div className="mt-4 flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 border border-[#D9E5DC] text-xs font-semibold text-[#1E3B2B]"><Clock className="h-3.5 w-3.5" />Thời gian ưu tiên còn {formatCountdown(remaining)}</div>
+              ) : (
+                <div className="mt-4 rounded-xl bg-[#FFF8E7] px-3.5 py-2 text-center text-xs text-[#8A5A00]">Thời gian ưu tiên đã qua, nhưng lịch vẫn được giữ cho tới khi Lunara xác nhận giao dịch.</div>
+              )}
             </div>
-            <p className="text-xs text-center text-[#526056]">Đây là mã thanh toán nội bộ <strong>{payment.transactionCode}</strong>, đang chờ nhân viên Lunara xác nhận thủ công.</p>
+            <div className="text-xs text-center text-[#526056] space-y-1">
+              <p>Quét VietQR để chuyển đúng <strong>{Number(payment.amount).toLocaleString('vi-VN')} đ</strong>.</p>
+              <p>{payment.bankAccountName} · {payment.bankAccount}</p>
+              <p>Nội dung bắt buộc: <strong>{payment.transactionCode}</strong>. SePay sẽ tự động đối soát sau khi ngân hàng ghi nhận.</p>
+            </div>
             <button type="button" onClick={() => void copyBankInfo()} className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#D9E5DC] bg-white py-2.5 text-xs font-medium text-[#526056] hover:bg-[#F8F9F5]">
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Đã sao chép' : 'Sao chép mã thanh toán nội bộ'}
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Đã sao chép' : 'Sao chép nội dung chuyển khoản'}
             </button>
-          </> : <p className="text-center text-sm text-[#526056]">{payment?.status === 'PAID' || booking.status === 'CONFIRMED' ? 'Thanh toán đã được nhân viên xác nhận. Vé lịch hẹn đã sẵn sàng.' : booking.status === 'PENDING_PAYMENT' && remaining === 0 ? 'Thời gian giữ chỗ đã hết. Vui lòng liên hệ spa nếu cần hỗ trợ.' : `Trạng thái thanh toán: ${payment?.status || 'đang khởi tạo'}`}</p>}
+          </> : <p className="text-center text-sm text-[#526056]">{payment?.status === 'PAID' || booking.status === 'CONFIRMED' ? 'Thanh toán đã được xác nhận. Vé lịch hẹn đã sẵn sàng.' : `Trạng thái thanh toán: ${payment?.status || 'đang khởi tạo'}`}</p>}
           <Button disabled={booking.status !== 'CONFIRMED'} onClick={() => navigate(`/ticket/${booking.bookingCode}`)} className="w-full rounded-xl h-13 bg-[#1E3B2B] text-white hover:bg-[#14271C] font-semibold text-sm shadow-luxury">
             Xem vé lịch hẹn <ArrowRight className="h-4 w-4 ml-1.5" />
           </Button>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Menu, X, Calendar, LogOut } from 'lucide-react';
+import { Sparkles, Menu, X, Calendar, CalendarCheck, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_HOME } from '@/lib/access-control';
 
@@ -41,7 +41,15 @@ export const Navbar: React.FC = () => {
           <a href="#reviews" className="hover:text-[#1E3B2B] transition-colors">
             Đánh giá
           </a>
-          {user && user.roleCode !== 'CUSTOMER' && (
+          {user && (user.roleCode === 'CUSTOMER' || !user.roleCode) && (
+            <Link
+              to="/my-bookings"
+              className="text-[#14271C] hover:text-[#1E3B2B] transition-colors flex items-center gap-1.5"
+            >
+              <span>Lịch của tôi</span>
+            </Link>
+          )}
+          {user && user.roleCode && user.roleCode !== 'CUSTOMER' && (
             <Link
               to={ROLE_HOME[user.roleCode] || '/admin/dashboard'}
               className="text-xs transition-colors flex items-center gap-1 border px-2.5 py-1 rounded-full bg-[#E8F0EA] border-[#1E3B2B]/30 text-[#1E3B2B] font-semibold hover:bg-[#D9E5DC]"
@@ -54,6 +62,16 @@ export const Navbar: React.FC = () => {
 
         {/* CTA Action - Desktop */}
         <div className="hidden md:flex items-center gap-3">
+          {user && (user.roleCode === 'CUSTOMER' || !user.roleCode) && (
+            <Button
+              variant="outline"
+              onClick={() => navigate('/my-bookings')}
+              className="rounded-full px-5 border-[#1E3B2B]/30 text-[#1E3B2B] hover:bg-[#E8F0EA] text-sm font-medium cursor-pointer flex items-center gap-1.5 transition-all hover:border-[#1E3B2B]"
+            >
+              <CalendarCheck className="h-4 w-4 text-[#1E3B2B]" />
+              Lịch của tôi
+            </Button>
+          )}
           <Button
             onClick={handleBookingClick}
             className="rounded-full px-6 bg-[#1E3B2B] text-white hover:bg-[#14271C] shadow-luxury text-sm cursor-pointer"
@@ -178,7 +196,30 @@ export const Navbar: React.FC = () => {
           >
             Đánh giá
           </a>
+          {user && (user.roleCode === 'CUSTOMER' || !user.roleCode) && (
+            <Link
+              to="/my-bookings"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-base font-semibold text-[#1E3B2B] flex items-center gap-2 py-1"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              <span>Lịch của tôi</span>
+            </Link>
+          )}
           <div className="pt-4 border-t border-[#E2E8E3] flex flex-col gap-3">
+            {user && (user.roleCode === 'CUSTOMER' || !user.roleCode) && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate('/my-bookings');
+                }}
+                className="w-full rounded-full border-[#1E3B2B]/30 text-[#1E3B2B] hover:bg-[#E8F0EA] cursor-pointer flex items-center justify-center gap-2 text-sm py-2.5"
+              >
+                <CalendarCheck className="h-4 w-4 text-[#1E3B2B]" />
+                Lịch của tôi
+              </Button>
+            )}
             <Button
               onClick={() => {
                 setMobileMenuOpen(false);
