@@ -33,6 +33,9 @@ Chi tiết:
 
 - `db`: MySQL 8.4, seed từ template, healthcheck trước khi app khởi động.
 - `redis`: Redis 7, phụ thuộc chính thức của backend.
+- `kafka`: Apache Kafka 3.9.1 chế độ KRaft (không cần Zookeeper), phụ thuộc của realtime/SSE.
+  Backend nối nội bộ `kafka:9092`; host debug qua `localhost:9094`. Topic tự tạo.
+- `chroma`: ChromaDB 0.6.3 cho RAG, mặc định tắt index (`CHROMA_ENABLED=false`).
 - `backend`: build từ `templates/Dockerfile.backend` chung với context root repo, yêu cầu module có `pom.xml` + `mvnw`.
 - `frontend`: build từ `templates/Dockerfile.frontend` (Node build, nginx serve), context `frontend/lunara`. `VITE_API_URL` chốt lúc build, đổi thì build lại.
 
@@ -41,7 +44,7 @@ Chi tiết:
 Chạy từ thư mục gốc:
 
 ```sh
-make up          # khởi động DB template + Redis, chưa có data
+make up          # khởi động DB template + Redis + Kafka, chưa có data
 make up-app      # full stack khi backend đã có pom.xml
 make down        # dừng
 make logs SERVICE=db

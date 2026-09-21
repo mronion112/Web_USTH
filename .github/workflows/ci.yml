@@ -134,6 +134,7 @@ jobs:
           FRONTEND_URL: http://localhost:5173
           GEMINI_API_KEY: test-gemini-key
           CHROMA_URL: http://127.0.0.1:8000
+          KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
         run: mvn -B -f backend/pom.xml test
 
       - name: Cài Node
