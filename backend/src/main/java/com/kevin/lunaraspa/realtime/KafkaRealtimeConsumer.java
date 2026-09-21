@@ -14,7 +14,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class KafkaRealtimeConsumer {
-    private static final Set<String> EMAIL_EVENTS = Set.of("PAYMENT_RECEIVED", "RESCHEDULED");
+    private static final Set<String> EMAIL_EVENTS = Set.of(
+            "PAYMENT_RECEIVED", "RESCHEDULED", "EMAIL_RESEND_REQUESTED"
+    );
     private final ObjectMapper objectMapper;
     private final SseEventHub hub;
     private final BookingEmailService emailService;

@@ -9,5 +9,6 @@ public final class PaymentDtos {
     public record PaidRequest(String transactionCode) {}
     public record PaymentResponse(Long id, String transactionCode, Long bookingId, String status,
                                   String method, BigDecimal amount, String qrPayload,
-                                  LocalDateTime paidAt, LocalDateTime refundedAt) {}
+                                  LocalDateTime paidAt, LocalDateTime refundedAt,
+                                  String bankBin, String bankAccount, String bankAccountName) {}
 }

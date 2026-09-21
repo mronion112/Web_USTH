@@ -9,10 +9,12 @@ import com.kevin.lunaraspa.booking.dto.BookingApiResponse;
 import com.kevin.lunaraspa.booking.dto.BookingDetailResponse;
 import com.kevin.lunaraspa.booking.dto.BookingSummaryResponse;
 import com.kevin.lunaraspa.booking.dto.BookingSearchResponse;
+import com.kevin.lunaraspa.booking.dto.BookingSortField;
 import com.kevin.lunaraspa.booking.dto.CheckInResponse;
 import com.kevin.lunaraspa.booking.dto.RescheduleBookingRequest;
 import com.kevin.lunaraspa.booking.dto.RescheduleBookingResponse;
 import com.kevin.lunaraspa.booking.dto.ManagerCreateBookingRequest;
+import com.kevin.lunaraspa.booking.dto.EmailDispatchResponse;
 import com.kevin.lunaraspa.booking.entity.BookingStatus;
 import com.kevin.lunaraspa.core.common.model.response.PageableResponse;
 import com.kevin.lunaraspa.booking.dto.CreateBookingRequest;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.time.LocalDateTime;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -119,10 +122,12 @@ public class BookingController {
             @RequestParam(required = false) Boolean unassigned,
             @RequestParam(required = false) String code,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "BOOKING_START") BookingSortField sortBy,
+            @RequestParam(defaultValue = "DESC") Sort.Direction sortDirection) {
         return ResponseEntity.ok(BookingApiResponse.success("Search bookings successfully",
                 bookingService.searchBookings(from, to, status, staffId, unassigned, code, page, size,
-                        SecurityUtils.getCurrentUserEmail())));
+                        sortBy, sortDirection, SecurityUtils.getCurrentUserEmail())));
     }
 
     @PostMapping("/manager/bookings")
@@ -137,5 +142,20 @@ public class BookingController {
     public ResponseEntity<BookingApiResponse<CheckInResponse>> checkIn(@PathVariable Long bookingId) {
         return ResponseEntity.ok(BookingApiResponse.success("Check-in successfully",
                 bookingService.checkIn(bookingId, SecurityUtils.getCurrentUserEmail())));
+    }
+
+    @PatchMapping("/manager/bookings/{bookingId}/reschedule")
+    public ResponseEntity<BookingApiResponse<RescheduleBookingResponse>> rescheduleByManager(
+            @PathVariable Long bookingId, @RequestBody RescheduleBookingRequest request) {
+        return ResponseEntity.ok(BookingApiResponse.success("Reschedule booking successfully",
+                bookingService.rescheduleByManager(bookingId, request, SecurityUtils.getCurrentUserEmail())));
+    }
+
+    @PostMapping("/manager/bookings/{bookingId}/email/resend")
+    public ResponseEntity<BookingApiResponse<EmailDispatchResponse>> resendBookingEmail(
+            @PathVariable Long bookingId) {
+        return ResponseEntity.accepted().body(BookingApiResponse.success("Booking email queued",
+                bookingService.resendBookingEmail(bookingId, SecurityUtils.getCurrentUserEmail()),
+                HttpStatus.ACCEPTED));
     }
 }

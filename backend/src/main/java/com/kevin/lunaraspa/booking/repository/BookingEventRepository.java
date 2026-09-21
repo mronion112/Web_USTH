@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface BookingEventRepository extends BaseRepository<BookingEvent, Long> {
+    long countByBookingIdAndEventType(Long bookingId, String eventType);
 }

@@ -49,4 +49,19 @@ class KafkaRealtimeConsumerTest {
         verify(hub).broadcast(envelope);
         verify(email, never()).sendBookingUpdate(envelope);
     }
+
+    @Test
+    void manualResendEventSendsMailFromBookingTopic() throws Exception {
+        ObjectMapper mapper = mock(ObjectMapper.class);
+        SseEventHub hub = mock(SseEventHub.class);
+        BookingEmailService email = mock(BookingEmailService.class);
+        KafkaRealtimeConsumer consumer = new KafkaRealtimeConsumer(mapper, hub, email);
+        RealtimeEventEnvelope envelope = new RealtimeEventEnvelope("evt-3", "booking", "booking", 44L,
+                Instant.now(), 3L, "EMAIL_RESEND_REQUESTED", "LUN-44", 8L, 10L);
+        when(mapper.readValue("payload", RealtimeEventEnvelope.class)).thenReturn(envelope);
+
+        consumer.receive(new ConsumerRecord<>(RealtimeTopics.BOOKING, 0, 0L, "LUN-44", "payload"));
+
+        verify(email).sendBookingUpdate(envelope);
+    }
 }

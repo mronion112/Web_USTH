@@ -29,6 +29,7 @@ public class OperationsSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, paths).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/**", "/api/staff").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payments/sepay/webhook").permitAll()
                         .requestMatchers("/api/manager/services/**", "/api/manager/staff/**",
                                 "/api/manager/dashboard/**")
                         .hasAnyAuthority("OWNER", "MANAGER", "ROLE_OWNER", "ROLE_MANAGER")
