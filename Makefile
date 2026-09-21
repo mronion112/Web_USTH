@@ -95,13 +95,13 @@ logs:
 	$(COMPOSE) logs -f $(SERVICE)
 
 seed: check-env wait-db
-	$(COMPOSE) up -d --wait db
 	$(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" < database/Web_DataBase_USTH.sql
 	@echo "Đã nạp lại schema template từ database/Web_DataBase_USTH.sql (không kèm data)"
 
-# Chờ mysqld nhận kết nối TCP trong container (healthcheck qua socket
-# có thể xanh trước khi cổng TCP mở).
+# Khởi động db rồi chờ mysqld nhận kết nối TCP trong container
+# (healthcheck qua socket có thể xanh trước khi cổng TCP mở).
 wait-db: check-env
+	$(COMPOSE) up -d db
 	@echo "Đang chờ MySQL nhận TCP..."
 	@i=1; \
 	while [ $$i -le 30 ]; do \
