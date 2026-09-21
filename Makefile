@@ -188,7 +188,7 @@ DEV_LOGIN_PATCH = templates/dev-login/dev-login.patch
 DEV_LOGIN_CODE_PATHS = backend/src frontend/lunara/src
 
 define set_env
-	if grep -qE "^$(1)=" $(ENV_FILE); then sed -i "s|^$(1)=.*|$(1)=$(2)|" $(ENV_FILE); else printf '%s=%s\n' "$(1)" "$(2)" >> $(ENV_FILE); fi
+if grep -qE "^$(1)=" $(ENV_FILE); then sed -i "s|^$(1)=.*|$(1)=$(2)|" $(ENV_FILE); else [ -n "$$(tail -c1 $(ENV_FILE))" ] && printf '\n' >> $(ENV_FILE); printf '%s=%s\n' "$(1)" "$(2)" >> $(ENV_FILE); fi
 endef
 
 dev-login-on: dev-login-apply dev-login-env-on
