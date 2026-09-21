@@ -15,6 +15,7 @@ const OAuth2RedirectPage = page(() => import('@/pages/OAuth2RedirectPage'), 'OAu
 const BookingPage = page(() => import('@/pages/BookingPage'), 'BookingPage');
 const CheckoutPage = page(() => import('@/pages/CheckoutPage'), 'CheckoutPage');
 const TicketPage = page(() => import('@/pages/TicketPage'), 'TicketPage');
+const MyBookingsPage = page(() => import('@/pages/MyBookingsPage'), 'MyBookingsPage');
 const AdminLoginPage = page(() => import('@/pages/admin/AdminLoginPage'), 'AdminLoginPage');
 const AdminLayout = page(() => import('@/components/layout/AdminLayout'), 'AdminLayout');
 const DashboardPage = page(() => import('@/pages/admin/DashboardPage'), 'DashboardPage');
@@ -58,6 +59,7 @@ function App() {
             <Route path="/booking" element={<BookingPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/ticket/:id" element={<TicketPage />} />
+            <Route path="/my-bookings" element={<MyBookingsPage />} />
 
             {/* Admin Authentication */}
             <Route path="/admin/login" element={<AdminLoginPage />} />

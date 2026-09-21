@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { paymentsApi, ApiPayment } from '@/lib/api';
+import { paymentsApi, ApiPayment, ApiSepayTransaction } from '@/lib/api';
 import { Search, QrCode, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react';
 import { useRefresh } from '@/lib/use-refresh';
 
@@ -16,17 +16,19 @@ export const PaymentsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [manualReview, setManualReview] = useState<ApiSepayTransaction[]>([]);
+  const [reconcilePaymentIds, setReconcilePaymentIds] = useState<Record<number, string>>({});
 
   const reload = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await paymentsApi.getAll({
-        search: search.trim() || undefined,
-        status: statusFilter,
-        size: 100,
-      }, signal);
+      const [data, review] = await Promise.all([
+        paymentsApi.getAll({ search: search.trim() || undefined, status: statusFilter, size: 100 }, signal),
+        paymentsApi.getSepayTransactions('MANUAL_REVIEW', signal),
+      ]);
       if (Array.isArray(data)) {
         setPayments(data);
       }
+      setManualReview(Array.isArray(review) ? review : []);
     } catch {
       // The transport retries on its next cycle.
     } finally {
@@ -72,6 +74,25 @@ export const PaymentsPage: React.FC = () => {
       await reload();
     } catch (err: any) {
       alert(err.message || 'Lỗi khi hoàn tiền');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReconcile = async (transaction: ApiSepayTransaction, action: 'CONFIRM' | 'IGNORE') => {
+    const paymentId = Number(reconcilePaymentIds[transaction.sepayId]);
+    if (action === 'CONFIRM' && (!paymentId || paymentId <= 0)) {
+      alert('Nhập Payment ID cần khớp trước khi xác nhận.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await paymentsApi.reconcileSepay(transaction.sepayId, action, action === 'CONFIRM' ? paymentId : undefined);
+      setSuccessMsg(action === 'CONFIRM' ? `Đã đối soát giao dịch SePay #${transaction.sepayId}` : `Đã bỏ qua giao dịch SePay #${transaction.sepayId}`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      await reload();
+    } catch (err: any) {
+      alert(err.message || 'Không thể xử lý giao dịch SePay');
     } finally {
       setActionLoading(false);
     }
@@ -217,7 +238,7 @@ export const PaymentsPage: React.FC = () => {
                     <td className="py-4 px-6 text-[#14271C]">{p.customerName || 'Khách hàng'}</td>
                     <td className="py-4 px-6">
                       <span className="px-2 py-0.5 rounded bg-[#FAFBF9] border border-[#E2E8E3] text-[11px] font-semibold text-[#526056]">
-                        {p.method}
+                        {p.paymentProvider || p.method}
                       </span>
                     </td>
                     <td className="py-4 px-6 font-semibold text-[#14271C]">
@@ -261,6 +282,41 @@ export const PaymentsPage: React.FC = () => {
           </table>
         </div>
       </Card>
+
+      {manualReview.length > 0 && (
+        <Card className="overflow-hidden border border-[#E6B85C]/40 shadow-luxury">
+          <div className="p-5 border-b border-[#E2E8E3] bg-[#FFF8E7]">
+            <h2 className="font-display text-xl font-semibold text-[#14271C]">SePay cần đối soát thủ công</h2>
+            <p className="text-xs text-[#6B726C] mt-1">Giao dịch sai mã, sai số tiền hoặc sai tài khoản không được tự động xác nhận booking.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#E2E8E3] text-[#718276] uppercase tracking-wider">
+                  <th className="p-4">SePay ID</th><th className="p-4">Nội dung</th><th className="p-4">Số tiền</th><th className="p-4">Lý do</th><th className="p-4">Xử lý</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8E3]">
+                {manualReview.map((transaction) => (
+                  <tr key={transaction.sepayId}>
+                    <td className="p-4 font-semibold">#{transaction.sepayId}</td>
+                    <td className="p-4"><div>{transaction.paymentCode || transaction.content || 'Không có mã'}</div><div className="text-[#8EAA97]">{transaction.referenceCode}</div></td>
+                    <td className="p-4 font-semibold">{Number(transaction.transferAmount).toLocaleString('vi-VN')} đ</td>
+                    <td className="p-4 text-[#BA1A1A]">{transaction.reviewReason}</td>
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <Input className="w-24 h-9" inputMode="numeric" placeholder="Payment ID" value={reconcilePaymentIds[transaction.sepayId] || ''} onChange={(event) => setReconcilePaymentIds((current) => ({ ...current, [transaction.sepayId]: event.target.value }))} />
+                        <Button disabled={actionLoading} className="h-9 text-xs" onClick={() => void handleReconcile(transaction, 'CONFIRM')}>Khớp</Button>
+                        <Button disabled={actionLoading} variant="outline" className="h-9 text-xs" onClick={() => void handleReconcile(transaction, 'IGNORE')}>Bỏ qua</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Transaction Detail Modal */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>

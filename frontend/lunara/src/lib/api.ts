@@ -267,6 +267,12 @@ export interface RescheduleBookingResponse {
   bookingEnd: string;
 }
 
+export interface EmailDispatchResponse {
+  bookingId: number;
+  bookingCode: string;
+  status: 'QUEUED';
+}
+
 // ----------------- Service Types & APIs -----------------
 
 export interface ApiService {
@@ -338,6 +344,18 @@ export interface PageableBookings {
   pageSize: number;
 }
 
+export interface BookingSearchParams {
+  from?: string;
+  to?: string;
+  status?: string;
+  staffId?: number;
+  code?: string;
+  page?: number;
+  size?: number;
+  sortBy?: 'BOOKING_START' | 'CREATED_AT';
+  sortDirection?: 'ASC' | 'DESC';
+}
+
 export const bookingsApi = {
   getAvailability: (req: {
     from: string;
@@ -368,15 +386,7 @@ export const bookingsApi = {
   getMy: () => api<ApiBookingSummary[]>('/api/bookings/my'),
   getByCode: (code: string, signal?: AbortSignal) => api<ApiBooking>(`/api/bookings/${code}`, { signal }),
 
-  search: (params: {
-    from?: string;
-    to?: string;
-    status?: string;
-    staffId?: number;
-    code?: string;
-    page?: number;
-    size?: number;
-  } = {}, signal?: AbortSignal) => {
+  search: (params: BookingSearchParams = {}, signal?: AbortSignal) => {
     const q = new URLSearchParams();
     if (params.from) q.set('from', params.from);
     if (params.to) q.set('to', params.to);
@@ -385,6 +395,8 @@ export const bookingsApi = {
     if (params.code) q.set('code', params.code);
     if (params.page !== undefined) q.set('page', String(params.page));
     if (params.size !== undefined) q.set('size', String(params.size));
+    if (params.sortBy) q.set('sortBy', params.sortBy);
+    if (params.sortDirection) q.set('sortDirection', params.sortDirection);
     return api<PageableBookings>(`/api/manager/bookings?${q.toString()}`, { signal });
   },
 
@@ -400,6 +412,15 @@ export const bookingsApi = {
   reschedule: (bookingCode: string, bookingStart: string, staffAccountId?: number) => api<RescheduleBookingResponse>(`/api/bookings/${bookingCode}/reschedule`, {
     method: 'PATCH',
     body: JSON.stringify({ bookingStart, ...(staffAccountId ? { staffAccountId } : {}) }),
+  }),
+
+  managerReschedule: (bookingId: number | string, bookingStart: string, staffAccountId?: number) => api<RescheduleBookingResponse>(`/api/manager/bookings/${bookingId}/reschedule`, {
+    method: 'PATCH',
+    body: JSON.stringify({ bookingStart, ...(staffAccountId ? { staffAccountId } : {}) }),
+  }),
+
+  resendEmail: (bookingId: number | string) => api<EmailDispatchResponse>(`/api/manager/bookings/${bookingId}/email/resend`, {
+    method: 'POST',
   }),
 };
 
@@ -537,6 +558,29 @@ export interface ApiPayment {
   paidAt?: string;
   createdAt?: string;
   qrPayload?: string;
+  bankBin?: string;
+  bankAccount?: string;
+  bankAccountName?: string;
+  bankReference?: string;
+  paymentProvider?: string;
+}
+
+export interface ApiSepayTransaction {
+  id: number;
+  sepayId: number;
+  gateway: string;
+  transactionDate?: string;
+  accountNumber?: string;
+  subAccount?: string;
+  paymentCode?: string;
+  content?: string;
+  transferType: string;
+  transferAmount: number;
+  referenceCode?: string;
+  matchedPaymentId?: number;
+  status: 'RECEIVED' | 'CONFIRMED' | 'MANUAL_REVIEW' | 'IGNORED';
+  reviewReason?: string;
+  createdAt: string;
 }
 
 export const paymentsApi = {
@@ -560,6 +604,15 @@ export const paymentsApi = {
   refund: (paymentId: number | string) => api<ApiPayment>(`/api/payments/${paymentId}/refund`, {
     method: 'POST',
   }),
+  getSepayTransactions: (status?: ApiSepayTransaction['status'], signal?: AbortSignal) => {
+    const query = status ? `?status=${status}` : '';
+    return api<ApiSepayTransaction[]>(`/api/payments/sepay/transactions${query}`, { signal });
+  },
+  reconcileSepay: (sepayId: number, action: 'CONFIRM' | 'IGNORE', paymentId?: number) =>
+    api<ApiSepayTransaction>(`/api/payments/sepay/transactions/${sepayId}/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify({ action, ...(paymentId ? { paymentId } : {}) }),
+    }),
 };
 
 // ----------------- Customers APIs -----------------

@@ -10,9 +10,6 @@ import {
   Minus,
   PanelRight,
   Sparkles,
-  ChevronRight,
-  ShieldCheck,
-  CheckCheck,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 

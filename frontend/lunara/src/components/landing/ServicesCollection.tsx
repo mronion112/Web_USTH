@@ -187,7 +187,6 @@ const DEFAULT_SERVICES_V1: ApiService[] = [
 export const ServicesCollection: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [services, setServices] = useState<ApiService[]>(DEFAULT_SERVICES_V1);
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {

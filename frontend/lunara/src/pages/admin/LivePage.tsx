@@ -6,6 +6,7 @@ import { SlidingTabs } from '@/components/transitions/SlidingTabs';
 import { TiltCard } from '@/components/transitions/TiltCard';
 import { bookingsApi, ApiBookingSearch } from '@/lib/api';
 import { useRefresh } from '@/lib/use-refresh';
+import { liveBookingsQuery } from '@/lib/admin-booking-query';
 
 export const LivePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -28,9 +29,9 @@ export const LivePage: React.FC = () => {
 
   const loadLiveBookings = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await bookingsApi.search({ size: 50 }, signal);
+      const res = await bookingsApi.search(liveBookingsQuery(), signal);
       if (res && Array.isArray(res.content)) {
-        setBookings(res.content);
+        setBookings([...res.content].sort((left, right) => left.bookingStart.localeCompare(right.bookingStart)));
       }
     } catch {
       // The transport retries on its next cycle.
