@@ -65,50 +65,8 @@ jobs:
 
   build-test:
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: test-root
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
     steps:
       - uses: actions/checkout@v5
-
-      - name: Chờ MySQL sẵn sàng
-        if: hashFiles('backend/pom.xml') != ''
-        env:
-          MYSQL_PWD: test-root
-        run: |
-          for i in $(seq 1 30); do
-            if mysqladmin ping -h127.0.0.1 --silent; then
-              echo "MySQL đã sẵn sàng."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "MySQL không sẵn sàng sau 60 giây." >&2
-          exit 1
-
-      - name: Nạp schema cho test
-        if: hashFiles('backend/pom.xml') != ''
-        env:
-          MYSQL_PWD: test-root
-        run: mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
 
       - name: Cài Java
         if: hashFiles('backend/pom.xml') != ''
@@ -118,23 +76,11 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # Test backend tự dùng H2 qua backend/src/test/resources/application.yml,
+      # không cần MySQL/Redis. Không truyền SPRING_DATASOURCE_* vì biến môi trường
+      # sẽ đè URL H2 trong khi driver-class-name vẫn là H2, làm hỏng context.
       - name: Test backend
         if: hashFiles('backend/pom.xml') != ''
-        env:
-          BACKEND_PORT: 8080
-          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-          SPRING_DATASOURCE_USERNAME: root
-          SPRING_DATASOURCE_PASSWORD: test-root
-          REDIS_HOST: 127.0.0.1
-          REDIS_PORT: 6379
-          JWT_SECRET: test-secret-0123456789abcdef-0123456789abcdef
-          JWT_EXPIRATION_MS: 86400000
-          GOOGLE_CLIENT_ID: test-client-id
-          GOOGLE_CLIENT_SECRET: test-client-secret
-          FRONTEND_URL: http://localhost:5173
-          GEMINI_API_KEY: test-gemini-key
-          CHROMA_URL: http://127.0.0.1:8000
-          KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
         run: mvn -B -f backend/pom.xml test
 
       - name: Cài Node
