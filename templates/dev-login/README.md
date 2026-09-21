@@ -6,15 +6,12 @@ mà không cần cấu hình Google OAuth. Không nằm trong code chính, chỉ
 ## TL;DR
 
 ```sh
-git apply templates/dev-login/dev-login.patch
-# templates/.env: APP_DEV_LOGIN_ENABLED=true, VITE_DEV_LOGIN=true
-make down-all && make up-app
+make dev-login-on    # áp patch + bật biến + build lại full stack
 # mở http://localhost:5173/dev-login
+make dev-login-off   # gỡ patch + tắt biến + build lại full stack
 ```
 
-Gỡ: `git apply -R templates/dev-login/dev-login.patch`.
-Quy trình chỉ 3 bước, không phức tạp; khó nhất là nhớ gỡ trước khi push,
-nên đã có guard tự chặn (xem bên dưới).
+Quy trình chỉ 2 lệnh make, không phức tạp. Guard tự chặn nếu quên gỡ trước khi push.
 
 ## Nội dung patch
 
@@ -31,9 +28,23 @@ nên đã có guard tự chặn (xem bên dưới).
 - CI job `dev-login-guard` chạy trên mọi push/PR: fail nếu thấy dấu vết patch
   trong `backend/src`, `frontend/lunara/src` hoặc các file config hạ tầng.
 - Local: `make verify-no-dev-login` kiểm tra tương tự, kể cả file chưa add.
-- Nếu guard fail: `git apply -R templates/dev-login/dev-login.patch`.
+- Nếu guard fail: `make dev-login-off` (hoặc `git apply -R templates/dev-login/dev-login.patch`).
 
-## Bật cấu hình
+## Lệnh make
+
+| Lệnh                    | Việc làm                                                        |
+| ----------------------- | --------------------------------------------------------------- |
+| `make dev-login-on`     | Áp patch, set biến `true` trong `templates/.env`, chạy `up-app`   |
+| `make dev-login-off`    | Gỡ patch, set biến `false`, chạy `up-app`                         |
+| `make dev-login-apply`  | Chỉ áp patch (idempotent)                                        |
+| `make dev-login-revert` | Chỉ gỡ patch (idempotent)                                        |
+| `make dev-login-env-on` | Chỉ set `APP_DEV_LOGIN_ENABLED=true`, `VITE_DEV_LOGIN=true`        |
+| `make dev-login-env-off`| Chỉ set hai biến về `false`                                       |
+
+Các lệnh `*-env-*` sửa trực tiếp `templates/.env` (file local, không commit).
+Nếu chưa có `templates/.env`, chạy `cp templates/.env.example templates/.env` trước.
+
+## Bật cấu hình thủ công (nếu không dùng make)
 
 Sửa `templates/.env`:
 

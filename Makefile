@@ -23,7 +23,7 @@ BASELINE ?= origin/main
 DEV_LOGIN_PATHS = backend/src frontend/lunara/src templates/docker-compose.yml templates/Dockerfile.frontend templates/.env.example
 DEV_LOGIN_PATTERN = DEV_LOGIN_PATCH_MARKER|DevAuthController|DevLoginPage|/dev/auth/login|APP_DEV_LOGIN_ENABLED|VITE_DEV_LOGIN
 
-.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra verify-no-dev-login
+.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra verify-no-dev-login dev-login-on dev-login-off dev-login-apply dev-login-revert dev-login-env-on dev-login-env-off
 
 help:
 	@echo "Targets:"
@@ -45,6 +45,8 @@ help:
 	@echo "  test-backend Chạy test backend với factory override (bỏ qua nếu chưa có code)"
 	@echo "  verify-infra Liệt kê file hạ tầng đổi khác so với baseline"
 	@echo "  verify-no-dev-login Chặn nếu patch dev-login đang được áp"
+	@echo "  dev-login-on  Áp patch dev-login, bật biến, chạy full stack"
+	@echo "  dev-login-off Gỡ patch dev-login, tắt biến, chạy full stack"
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "Thiếu $(ENV_FILE). Chạy: cp templates/.env.example $(ENV_FILE)" >&2; exit 1)
@@ -179,3 +181,47 @@ verify-no-dev-login:
 	@hits=$$(git grep --untracked -lE "$(DEV_LOGIN_PATTERN)" -- $(DEV_LOGIN_PATHS) || true); \
 	if [ -n "$$hits" ]; then echo "$$hits"; echo "Phát hiện dấu vết patch dev-login, gỡ trước khi commit/push: git apply -R templates/dev-login/dev-login.patch" >&2; exit 1; fi; \
 	echo "Không có dấu vết dev-login."
+
+# Bật/tắt nhanh dev-login: tự áp/gỡ patch và set biến trong templates/.env.
+# Lưu ý: khi đang bật, make verify-no-dev-login sẽ fail (đúng thiết kế).
+DEV_LOGIN_PATCH = templates/dev-login/dev-login.patch
+DEV_LOGIN_CODE_PATHS = backend/src frontend/lunara/src
+
+define set_env
+	if grep -qE "^$(1)=" $(ENV_FILE); then sed -i "s|^$(1)=.*|$(1)=$(2)|" $(ENV_FILE); else printf '%s=%s\n' "$(1)" "$(2)" >> $(ENV_FILE); fi
+endef
+
+dev-login-on: dev-login-apply dev-login-env-on
+	@echo "Đang build lại full stack..."
+	$(MAKE) --no-print-directory up-app
+	@echo "Dev login bật. Mở http://localhost:5173/dev-login"
+
+dev-login-off: dev-login-revert dev-login-env-off
+	@echo "Đang build lại full stack..."
+	$(MAKE) --no-print-directory up-app
+	@echo "Dev login tắt."
+
+dev-login-apply:
+	@test -f $(DEV_LOGIN_PATCH) || (echo "Thiếu $(DEV_LOGIN_PATCH)" >&2; exit 1)
+	@if git grep --untracked -qE "DEV_LOGIN_PATCH_MARKER" -- $(DEV_LOGIN_CODE_PATHS) 2>/dev/null; then \
+		echo "Patch đã áp, bỏ qua."; \
+	else \
+		git apply $(DEV_LOGIN_PATCH) && echo "Đã áp patch dev-login."; \
+	fi
+
+dev-login-revert:
+	@if git grep --untracked -qE "DEV_LOGIN_PATCH_MARKER" -- $(DEV_LOGIN_CODE_PATHS) 2>/dev/null; then \
+		git apply -R $(DEV_LOGIN_PATCH) && echo "Đã gỡ patch dev-login."; \
+	else \
+		echo "Patch chưa áp, bỏ qua."; \
+	fi
+
+dev-login-env-on: check-env
+	@$(call set_env,APP_DEV_LOGIN_ENABLED,true)
+	@$(call set_env,VITE_DEV_LOGIN,true)
+	@echo "Đã bật APP_DEV_LOGIN_ENABLED và VITE_DEV_LOGIN trong $(ENV_FILE)"
+
+dev-login-env-off: check-env
+	@$(call set_env,APP_DEV_LOGIN_ENABLED,false)
+	@$(call set_env,VITE_DEV_LOGIN,false)
+	@echo "Đã tắt APP_DEV_LOGIN_ENABLED và VITE_DEV_LOGIN trong $(ENV_FILE)"
