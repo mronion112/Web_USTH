@@ -18,7 +18,12 @@ REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_
 INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
 BASELINE ?= origin/main
 
-.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra
+# Chặn trường hợp áp patch dev-login rồi commit/push vào main.
+# Không quét Makefile/.github để tránh tự khớp chính pattern này.
+DEV_LOGIN_PATHS = backend/src frontend/lunara/src templates/docker-compose.yml templates/Dockerfile.frontend templates/.env.example
+DEV_LOGIN_PATTERN = DEV_LOGIN_PATCH_MARKER|DevAuthController|DevLoginPage|/dev/auth/login|APP_DEV_LOGIN_ENABLED|VITE_DEV_LOGIN
+
+.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra verify-no-dev-login
 
 help:
 	@echo "Targets:"
@@ -39,6 +44,7 @@ help:
 	@echo "  validate     Kiểm tra đủ bảng theo kỳ vọng"
 	@echo "  test-backend Chạy test backend với factory override (bỏ qua nếu chưa có code)"
 	@echo "  verify-infra Liệt kê file hạ tầng đổi khác so với baseline"
+	@echo "  verify-no-dev-login Chặn nếu patch dev-login đang được áp"
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "Thiếu $(ENV_FILE). Chạy: cp templates/.env.example $(ENV_FILE)" >&2; exit 1)
@@ -167,3 +173,9 @@ verify-infra:
 	@git diff --name-status $(BASELINE)...HEAD -- $(INFRA_PATHS); \
 	git status --short -- $(INFRA_PATHS); \
 	echo "Xong. Trống nghĩa là hạ tầng khớp baseline."
+
+# Chặn commit/push khi patch dev-login còn áp (endpoint tạo tài khoản không mật khẩu).
+verify-no-dev-login:
+	@hits=$$(git grep --untracked -lE "$(DEV_LOGIN_PATTERN)" -- $(DEV_LOGIN_PATHS) || true); \
+	if [ -n "$$hits" ]; then echo "$$hits"; echo "Phát hiện dấu vết patch dev-login, gỡ trước khi commit/push: git apply -R templates/dev-login/dev-login.patch" >&2; exit 1; fi; \
+	echo "Không có dấu vết dev-login."

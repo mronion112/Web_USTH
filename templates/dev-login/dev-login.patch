@@ -1,9 +1,9 @@
 diff --git a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java
 new file mode 100644
-index 0000000..b145d9f
+index 0000000..ff8bea6
 --- /dev/null
 +++ b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,137 @@
 +package com.kevin.lunaraspa.authentication_account;
 +
 +import com.kevin.lunaraspa.authentication_account.entity.Account;
@@ -44,6 +44,7 @@ index 0000000..b145d9f
 +@RequestMapping("/dev/auth")
 +@RequiredArgsConstructor
 +@ConditionalOnProperty(prefix = "app.dev-login", name = "enabled", havingValue = "true")
++// DEV_LOGIN_PATCH_MARKER: file này chỉ tồn tại khi áp patch dev-login. Không commit vào main.
 +public class DevAuthController {
 +
 +    private static final Set<String> ALLOWED_ROLES = Set.of(
@@ -235,10 +236,10 @@ index 1db734d..1a2f0b8 100644
    setStoredRefreshToken(null);
 diff --git a/frontend/lunara/src/pages/DevLoginPage.tsx b/frontend/lunara/src/pages/DevLoginPage.tsx
 new file mode 100644
-index 0000000..5a0dd6e
+index 0000000..59286fd
 --- /dev/null
 +++ b/frontend/lunara/src/pages/DevLoginPage.tsx
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,88 @@
 +import React, { useState } from 'react';
 +import { Link } from 'react-router-dom';
 +import { devLogin } from '@/lib/api';
@@ -249,6 +250,7 @@ index 0000000..5a0dd6e
 +
 +const DEV_LOGIN_ENABLED = import.meta.env.VITE_DEV_LOGIN === 'true';
 +
++// DEV_LOGIN_PATCH_MARKER: file này chỉ tồn tại khi áp patch dev-login. Không commit vào main.
 +export const DevLoginPage: React.FC = () => {
 +  const [email, setEmail] = useState('dev@lunara.local');
 +  const [role, setRole] = useState<RoleCode>('OWNER');

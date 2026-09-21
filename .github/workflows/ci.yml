@@ -190,3 +190,20 @@ jobs:
           fi
           git diff --name-status "origin/$BASE"...HEAD -- $PATHS
           echo "Xong. Sửa file hạ tầng cần reviewer xác nhận."
+
+  dev-login-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chặn patch dev-login lọt vào main
+        run: |
+          PATHS="backend/src frontend/lunara/src templates/docker-compose.yml templates/Dockerfile.frontend templates/.env.example"
+          PATTERN="DEV_LOGIN_PATCH_MARKER|DevAuthController|DevLoginPage|/dev/auth/login|APP_DEV_LOGIN_ENABLED|VITE_DEV_LOGIN"
+          HITS=$(git grep -lE "$PATTERN" -- $PATHS || true)
+          if [ -n "$HITS" ]; then
+            echo "$HITS"
+            echo "Phát hiện dấu vết patch dev-login. Gỡ trước khi push: git apply -R templates/dev-login/dev-login.patch" >&2
+            exit 1
+          fi
+          echo "Không có dấu vết dev-login."
