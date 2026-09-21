@@ -5,6 +5,7 @@ import com.kevin.lunaraspa.dashboard_manager.DashboardController;
 import com.kevin.lunaraspa.dashboard_manager.ReportController;
 import com.kevin.lunaraspa.booking.BookingController;
 import com.kevin.lunaraspa.payment.PaymentController;
+import com.kevin.lunaraspa.payment.sepay.SepayController;
 import com.kevin.lunaraspa.spa_service.SpaServiceController;
 import com.kevin.lunaraspa.staff_schedule.StaffScheduleController;
 import com.kevin.lunaraspa.staff_task.StaffTaskController;
@@ -33,6 +34,9 @@ class MissingEndpointContractTest {
         endpoint(PaymentController.class, "getForBooking", GetMapping.class, "/booking/{bookingId}");
         endpoint(PaymentController.class, "paid", PatchMapping.class, "/{paymentId}/paid");
         endpoint(PaymentController.class, "refund", PostMapping.class, "/{paymentId}/refund");
+        endpoint(SepayController.class, "webhook", PostMapping.class, "/webhook");
+        endpoint(SepayController.class, "transactions", GetMapping.class, "/transactions");
+        endpoint(SepayController.class, "reconcile", PostMapping.class, "/transactions/{sepayId}/reconcile");
         endpoint(DashboardController.class, "dashboard", GetMapping.class, "");
         endpoint(AttendanceController.class, "checkIn", PostMapping.class, "/check-in");
         endpoint(AttendanceController.class, "checkOut", PostMapping.class, "/check-out");
@@ -41,6 +45,10 @@ class MissingEndpointContractTest {
         endpoint(BookingController.class, "searchBookings", GetMapping.class, "/manager/bookings");
         endpoint(BookingController.class, "checkIn", PatchMapping.class, "/manager/bookings/{bookingId}/check-in");
         endpoint(BookingController.class, "reschedule", PatchMapping.class, "/bookings/{bookingCode}/reschedule");
+        endpoint(BookingController.class, "rescheduleByManager", PatchMapping.class,
+                "/manager/bookings/{bookingId}/reschedule");
+        endpoint(BookingController.class, "resendBookingEmail", PostMapping.class,
+                "/manager/bookings/{bookingId}/email/resend");
         endpoint(ReportController.class, "summary", GetMapping.class, "/summary");
     }
 

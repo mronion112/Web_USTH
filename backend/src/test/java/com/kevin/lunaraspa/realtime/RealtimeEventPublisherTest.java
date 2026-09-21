@@ -53,4 +53,22 @@ class RealtimeEventPublisherTest {
         verify(kafka).send(RealtimeTopics.SCHEDULE, "LUN-42", "{\"event\":true}");
         verify(mapper, times(2)).writeValueAsString(any(RealtimeEventEnvelope.class));
     }
+
+    @Test
+    void emailRequestPublishesOnlyToBookingTopic() throws Exception {
+        @SuppressWarnings("unchecked")
+        KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+        ObjectMapper mapper = mock(ObjectMapper.class);
+        when(mapper.writeValueAsString(any())).thenReturn("{\"event\":true}");
+        when(kafka.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        RealtimeEventPublisher publisher = new RealtimeEventPublisher(kafka, mapper);
+        Booking booking = Booking.builder().id(42L).bookingCode("LUN-42")
+                .customerAccountId(7L).staffAccountId(9L).build();
+
+        publisher.bookingEmailRequested(booking);
+
+        verify(kafka).send(RealtimeTopics.BOOKING, "LUN-42", "{\"event\":true}");
+        verify(kafka, times(1)).send(anyString(), anyString(), anyString());
+    }
 }

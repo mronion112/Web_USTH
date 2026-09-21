@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/api/auth", "/api/v1/auth"})
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -25,14 +25,9 @@ public class AuthController {
         return ResponseBuilder.ok(authService.getMe());
     }
 
-    @PostMapping({"/refresh", "/refresh-token"})
+    @PostMapping("/refresh-token")
     public ResponseEntity<Object> refreshToken(@RequestBody Map<String, String> request) {
         return ResponseBuilder.ok(authService.refreshToken(request));
-    }
-
-    @GetMapping("/csrf")
-    public ResponseEntity<Void> csrf() {
-        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/logout")

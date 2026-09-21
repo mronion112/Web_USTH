@@ -30,6 +30,10 @@ public class RealtimeEventPublisher {
         publishAfterCommit(RealtimeTopics.BOOKING, "booking", booking, eventType);
     }
 
+    public void bookingEmailRequested(Booking booking) {
+        publishAfterCommit(RealtimeTopics.BOOKING, "booking", booking, "EMAIL_RESEND_REQUESTED");
+    }
+
     public void scheduleChanged(Long staffAccountId, String eventType) {
         RealtimeEventEnvelope envelope = new RealtimeEventEnvelope(
                 UUID.randomUUID().toString(), "calendar", "staff", staffAccountId,

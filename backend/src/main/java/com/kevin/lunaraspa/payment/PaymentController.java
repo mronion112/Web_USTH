@@ -13,6 +13,7 @@ import com.kevin.lunaraspa.payment.exception.PaymentErrorCode;
 import com.kevin.lunaraspa.payment.repository.PaymentRepository;
 import com.kevin.lunaraspa.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +33,11 @@ public class PaymentController {
     private final AccountRepository accountRepository;
     private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
     private final RealtimeEventPublisher realtimeEventPublisher;
+    private final PaymentConfirmationService confirmationService;
+    private final VietQrPayloadGenerator vietQrPayloadGenerator;
+
+    @Value("${app.payment.bank-account-name}")
+    private String bankAccountName;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -47,9 +53,11 @@ public class PaymentController {
         String sql = """
                 SELECT p.id, p.transaction_code, p.booking_id, b.booking_code,
                        b.customer_name_snapshot AS customer_name,
-                       p.status, p.method, p.amount, p.paid_at, p.created_at, p.qr_payload
+                       p.status, p.method, p.amount, p.paid_at, p.created_at, p.qr_payload,
+                       st.reference_code AS bank_reference, st.gateway AS payment_provider
                 FROM payments p
                 LEFT JOIN bookings b ON p.booking_id = b.id
+                LEFT JOIN sepay_transactions st ON st.matched_payment_id = p.id AND st.status = 'CONFIRMED'
                 WHERE (:status IS NULL OR :status = '' OR :status = 'ALL' OR p.status = :status)
                   AND (:search IS NULL OR :search = ''
                        OR p.transaction_code LIKE :searchPattern
@@ -81,6 +89,11 @@ public class PaymentController {
             map.put("paidAt", rs.getObject("paid_at", LocalDateTime.class));
             map.put("createdAt", rs.getObject("created_at", LocalDateTime.class));
             map.put("qrPayload", rs.getString("qr_payload"));
+            map.put("bankReference", rs.getString("bank_reference"));
+            map.put("paymentProvider", rs.getString("payment_provider"));
+            map.put("bankBin", vietQrPayloadGenerator.bankBin());
+            map.put("bankAccount", vietQrPayloadGenerator.bankAccount());
+            map.put("bankAccountName", bankAccountName);
             return map;
         });
 
@@ -101,7 +114,9 @@ public class PaymentController {
         ensureCanView(actor, booking);
         Optional<Payment> existing = paymentRepository.findByBookingId(booking.getId());
         if (existing.isPresent()) {
-            return ResponseBuilder.ok(toResponse(existing.get()), "Payment already initialized");
+            Payment payment = existing.get();
+            refreshUnpaidQr(payment);
+            return ResponseBuilder.ok(toResponse(payment), "Payment already initialized");
         }
         String temporaryCode = "TMP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
         Payment payment = Payment.builder().transactionCode(temporaryCode).bookingId(booking.getId())
@@ -109,20 +124,23 @@ public class PaymentController {
         paymentRepository.saveAndFlush(payment);
         String code = "PAY-" + LocalDateTime.now().format(DATE) + "-" + String.format("%05d", payment.getId());
         payment.setTransactionCode(code);
-        if (method == PaymentMethod.QR) payment.setQrPayload("LUNARA|" + code + "|" + payment.getAmount().toPlainString());
+        if (method == PaymentMethod.QR) {
+            payment.setQrPayload(vietQrPayloadGenerator.generate(payment.getAmount(), code));
+        }
         paymentRepository.saveAndFlush(payment);
         realtimeEventPublisher.paymentChanged(booking, "PAYMENT_INITIALIZED");
         return ResponseBuilder.ok(toResponse(payment), HttpStatus.CREATED, "Payment created successfully");
     }
 
     @GetMapping("/booking/{bookingId}")
-    @Transactional(readOnly = true)
+    @Transactional
     public ResponseEntity<Object> getForBooking(@PathVariable Long bookingId) {
         Payment payment = paymentRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new AppException(PaymentErrorCode.NOT_FOUND));
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(PaymentErrorCode.BOOKING_NOT_FOUND));
         ensureCanView(currentAccount(), booking);
+        refreshUnpaidQr(payment);
         return ResponseBuilder.ok(toResponse(payment), "Get payment successfully");
     }
 
@@ -131,20 +149,8 @@ public class PaymentController {
     public ResponseEntity<Object> paid(@PathVariable Long paymentId, @RequestBody PaidRequest request) {
         Account actor = currentAccount();
         ensureOperations(actor, false);
-        Payment payment = get(paymentId);
-        if (payment.getStatus() != PaymentStatus.UNPAID) throw new AppException(PaymentErrorCode.INVALID_STATUS);
-        if (request == null || request.transactionCode() == null
-                || !payment.getTransactionCode().equals(request.transactionCode().trim()))
-            throw new AppException(PaymentErrorCode.TRANSACTION_MISMATCH);
-        LocalDateTime now = LocalDateTime.now();
-        payment.setStatus(PaymentStatus.PAID); payment.setPaidAt(now);
-        Booking booking = bookingRepository.findById(payment.getBookingId())
-                .orElseThrow(() -> new AppException(PaymentErrorCode.BOOKING_NOT_FOUND));
-        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) booking.setStatus(BookingStatus.CONFIRMED);
-        booking.addEvent(BookingEvent.builder().eventType("PAYMENT_RECEIVED").actorAccountId(actor.getId())
-                .message("Payment " + payment.getTransactionCode() + " was received.").occurredAt(now).build());
-        bookingRepository.saveAndFlush(booking); paymentRepository.saveAndFlush(payment);
-        realtimeEventPublisher.paymentChanged(booking, "PAYMENT_RECEIVED");
+        if (request == null) throw new AppException(PaymentErrorCode.TRANSACTION_MISMATCH);
+        Payment payment = confirmationService.confirmManually(paymentId, request.transactionCode(), actor.getId());
         return ResponseBuilder.ok(toResponse(payment), "Payment completed successfully");
     }
 
@@ -170,6 +176,14 @@ public class PaymentController {
         if (id == null || id <= 0) throw new AppException(PaymentErrorCode.NOT_FOUND);
         return paymentRepository.findById(id).orElseThrow(() -> new AppException(PaymentErrorCode.NOT_FOUND));
     }
+    private void refreshUnpaidQr(Payment payment) {
+        if (payment.getMethod() != PaymentMethod.QR || payment.getStatus() != PaymentStatus.UNPAID) return;
+        String expected = vietQrPayloadGenerator.generate(payment.getAmount(), payment.getTransactionCode());
+        if (!expected.equals(payment.getQrPayload())) {
+            payment.setQrPayload(expected);
+            paymentRepository.saveAndFlush(payment);
+        }
+    }
     private Account currentAccount() {
         return accountRepository.findByEmail(SecurityUtils.getCurrentUserEmail())
                 .filter(a -> Boolean.TRUE.equals(a.getIsActive()))
@@ -191,6 +205,7 @@ public class PaymentController {
     }
     private PaymentResponse toResponse(Payment p) {
         return new PaymentResponse(p.getId(), p.getTransactionCode(), p.getBookingId(), p.getStatus().name(),
-                p.getMethod().name(), p.getAmount(), p.getQrPayload(), p.getPaidAt(), p.getRefundedAt());
+                p.getMethod().name(), p.getAmount(), p.getQrPayload(), p.getPaidAt(), p.getRefundedAt(),
+                vietQrPayloadGenerator.bankBin(), vietQrPayloadGenerator.bankAccount(), bankAccountName);
     }
 }

@@ -26,6 +26,14 @@ public class ApiPermissionRegistry {
         
         // Authentication Account
         routes.add(new RoutePermission(HttpMethod.GET, "/api/manager/accounts", "ADMIN_ACCOUNTS_VIEW"));
+
+        // Booking operations used by the manager/reception desk.
+        routes.add(new RoutePermission(HttpMethod.GET, "/api/manager/bookings", "BOOKINGS_VIEW"));
+        routes.add(new RoutePermission(HttpMethod.POST, "/api/manager/bookings", "BOOKINGS_CREATE"));
+        routes.add(new RoutePermission(HttpMethod.PATCH, "/api/manager/bookings/*/assign", "BOOKINGS_ASSIGN"));
+        routes.add(new RoutePermission(HttpMethod.PATCH, "/api/manager/bookings/*/check-in", "BOOKINGS_CHECKIN"));
+        routes.add(new RoutePermission(HttpMethod.PATCH, "/api/manager/bookings/*/reschedule", "BOOKINGS_EDIT"));
+        routes.add(new RoutePermission(HttpMethod.POST, "/api/manager/bookings/*/email/resend", "BOOKINGS_EDIT"));
     }
 
     public Optional<String> getRequiredPermission(HttpMethod method, String uri) {

@@ -1,0 +1,27 @@
+CREATE TABLE IF NOT EXISTS sepay_transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    sepay_id BIGINT NOT NULL,
+    gateway VARCHAR(50) NOT NULL,
+    transaction_date DATETIME NULL,
+    account_number VARCHAR(100) NULL,
+    sub_account VARCHAR(100) NULL,
+    payment_code VARCHAR(100) NULL,
+    content VARCHAR(500) NULL,
+    transfer_type VARCHAR(10) NOT NULL,
+    transfer_amount DECIMAL(15,2) NOT NULL,
+    accumulated DECIMAL(15,2) NULL,
+    reference_code VARCHAR(150) NULL,
+    raw_payload LONGTEXT NOT NULL,
+    matched_payment_id BIGINT NULL,
+    status VARCHAR(30) NOT NULL,
+    review_reason VARCHAR(500) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_sepay_transactions_sepay_id UNIQUE (sepay_id),
+    CONSTRAINT uq_sepay_transactions_payment UNIQUE (matched_payment_id),
+    INDEX idx_sepay_transactions_status_created (status, created_at),
+    INDEX idx_sepay_transactions_code (payment_code),
+    CONSTRAINT fk_sepay_transactions_payment FOREIGN KEY (matched_payment_id)
+        REFERENCES payments(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    CONSTRAINT chk_sepay_transactions_amount CHECK (transfer_amount > 0)
+);

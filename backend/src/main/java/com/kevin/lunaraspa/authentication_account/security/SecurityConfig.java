@@ -36,17 +36,13 @@ public class SecurityConfig {
             .cors(org.springframework.security.config.Customizer.withDefaults())
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll();
-                auth.requestMatchers(
-                        "/api/auth/refresh-token", "/api/auth/logout", "/api/auth/exchange",
-                        "/api/v1/auth/refresh", "/api/v1/auth/refresh-token", "/api/v1/auth/logout",
-                        "/api/v1/auth/exchange", "/api/v1/auth/csrf",
-                        "/api/v1/chatbot/**",
-                        "/oauth2/**").permitAll();
+                auth.requestMatchers("/api/auth/refresh-token", "/api/auth/logout", "/api/auth/exchange",
+                        "/oauth2/**", "/api/v1/chatbot/**").permitAll();
                 if (openApiEnabled) {
                     auth.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
                             "/v3/api-docs.yaml", "/v3/api-docs/**").permitAll();
                 }
-                auth.requestMatchers("/api/auth/me", "/api/v1/auth/me").authenticated()
+                auth.requestMatchers("/api/auth/me").authenticated()
                         .anyRequest().access(customAuthorizationManager);
             })
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

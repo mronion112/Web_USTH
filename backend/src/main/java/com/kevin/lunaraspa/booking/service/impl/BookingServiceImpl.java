@@ -10,7 +10,9 @@ import com.kevin.lunaraspa.booking.dto.BookingItemRequest;
 import com.kevin.lunaraspa.booking.dto.BookingItemResponse;
 import com.kevin.lunaraspa.booking.dto.BookingSummaryResponse;
 import com.kevin.lunaraspa.booking.dto.BookingSearchResponse;
+import com.kevin.lunaraspa.booking.dto.BookingSortField;
 import com.kevin.lunaraspa.booking.dto.CheckInResponse;
+import com.kevin.lunaraspa.booking.dto.EmailDispatchResponse;
 import com.kevin.lunaraspa.booking.dto.RescheduleBookingRequest;
 import com.kevin.lunaraspa.booking.dto.RescheduleBookingResponse;
 import com.kevin.lunaraspa.booking.dto.ManagerCreateBookingRequest;
@@ -289,7 +291,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public PageableResponse<BookingSearchResponse> searchBookings(LocalDateTime from, LocalDateTime to,
             BookingStatus status, Long staffId, Boolean unassigned, String code, int page, int size,
-            String currentUserEmail) {
+            BookingSortField sortBy, Sort.Direction sortDirection, String currentUserEmail) {
         Account actor = getActiveAccount(currentUserEmail);
         if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
         if (page < 0 || size < 1 || size > 100 || (from != null && to != null
@@ -309,8 +311,10 @@ public class BookingServiceImpl implements BookingService {
                     cb.like(cb.lower(root.get("bookingCode")), pattern),
                     cb.like(cb.lower(root.get("customerNameSnapshot")), pattern)));
         }
-        var result = bookingRepository.findAll(specification,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "bookingStart")));
+        BookingSortField safeSortBy = sortBy == null ? BookingSortField.BOOKING_START : sortBy;
+        Sort.Direction safeDirection = sortDirection == null ? Sort.Direction.DESC : sortDirection;
+        Sort sort = Sort.by(safeDirection, safeSortBy.property()).and(Sort.by(safeDirection, "id"));
+        var result = bookingRepository.findAll(specification, PageRequest.of(page, size, sort));
         var content = result.getContent().stream().map(this::toSearchResponse).toList();
         return PageableResponse.<BookingSearchResponse>builder().content(content).pageNumber(result.getNumber())
                 .pageSize(result.getSize()).totalPages(result.getTotalPages()).totalElements(result.getTotalElements())
@@ -344,16 +348,53 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public RescheduleBookingResponse reschedule(String bookingCode, RescheduleBookingRequest request,
                                                 String currentUserEmail) {
+        validateRescheduleRequest(request);
+        Account customer = getActiveAccount(currentUserEmail);
+        Booking booking = bookingRepository.findByBookingCodeForUpdateWithItems(bookingCode)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        if (!customer.getId().equals(booking.getCustomerAccountId()))
+            throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        return applyReschedule(booking, request, customer.getId(), AssignmentSource.CUSTOMER);
+    }
+
+    @Override
+    @Transactional
+    public RescheduleBookingResponse rescheduleByManager(Long bookingId, RescheduleBookingRequest request,
+                                                         String currentUserEmail) {
+        validateRescheduleRequest(request);
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        Booking booking = bookingRepository.findByIdForUpdateWithItems(bookingId)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        return applyReschedule(booking, request, actor.getId(), AssignmentSource.ADMIN);
+    }
+
+    @Override
+    @Transactional
+    public EmailDispatchResponse resendBookingEmail(Long bookingId, String currentUserEmail) {
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        if (normalizeText(booking.getCustomerEmailSnapshot()) == null
+                || booking.getCustomerEmailSnapshot().endsWith("@local.lunara")) {
+            throw new AppException(BookingFeatureErrorCode.BOOKING_EMAIL_UNAVAILABLE);
+        }
+        realtimeEventPublisher.bookingEmailRequested(booking);
+        return EmailDispatchResponse.builder().bookingId(booking.getId()).bookingCode(booking.getBookingCode())
+                .status("QUEUED").build();
+    }
+
+    private void validateRescheduleRequest(RescheduleBookingRequest request) {
         if (request == null || request.getBookingStart() == null
                 || !request.getBookingStart().isAfter(LocalDateTime.now()))
             throw new AppException(BookingFeatureErrorCode.INVALID_BOOKING_START);
         if (request.getStaffAccountId() != null && request.getStaffAccountId() <= 0)
             throw new AppException(BookingFeatureErrorCode.INVALID_STAFF_ID);
-        Account customer = getActiveAccount(currentUserEmail);
-        Booking booking = bookingRepository.findByBookingCode(bookingCode)
-                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
-        if (!customer.getId().equals(booking.getCustomerAccountId()))
-            throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+    }
+
+    private RescheduleBookingResponse applyReschedule(Booking booking, RescheduleBookingRequest request,
+                                                      Long actorAccountId, AssignmentSource explicitSource) {
         if (booking.getStatus() == BookingStatus.CHECKED_IN || booking.getStatus() == BookingStatus.IN_SERVICE
                 || booking.getStatus() == BookingStatus.COMPLETED)
             throw new AppException(BookingFeatureErrorCode.INVALID_STATUS_TRANSITION);
@@ -373,9 +414,9 @@ public class BookingServiceImpl implements BookingService {
         booking.setBookingStart(request.getBookingStart());
         booking.setBookingEnd(newEnd);
         booking.setStaffAccountId(selectedStaff);
-        if (request.getStaffAccountId() != null) booking.setAssignmentSource(AssignmentSource.CUSTOMER);
+        if (request.getStaffAccountId() != null) booking.setAssignmentSource(explicitSource);
         else if (previousStaff == null) booking.setAssignmentSource(AssignmentSource.SYSTEM);
-        booking.addEvent(buildEvent("RESCHEDULED", customer.getId(),
+        booking.addEvent(buildEvent("RESCHEDULED", actorAccountId,
                 "Booking rescheduled to " + request.getBookingStart() + "."));
         Booking saved = bookingRepository.saveAndFlush(booking);
         realtimeEventPublisher.bookingChanged(saved, "RESCHEDULED");
