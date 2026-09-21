@@ -1,0 +1,397 @@
+diff --git a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java
+new file mode 100644
+index 0000000..b145d9f
+--- /dev/null
++++ b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java
+@@ -0,0 +1,136 @@
++package com.kevin.lunaraspa.authentication_account;
++
++import com.kevin.lunaraspa.authentication_account.entity.Account;
++import com.kevin.lunaraspa.authentication_account.entity.Role;
++import com.kevin.lunaraspa.authentication_account.repository.AccountRepository;
++import com.kevin.lunaraspa.authentication_account.repository.RoleRepository;
++import com.kevin.lunaraspa.authentication_account.security.JwtUtils;
++import com.kevin.lunaraspa.core.exception.AppException;
++import com.kevin.lunaraspa.core.exception.AuthErrorCode;
++import com.kevin.lunaraspa.core.http.ResponseBuilder;
++import com.kevin.lunaraspa.profiles.entity.CustomerProfile;
++import com.kevin.lunaraspa.profiles.entity.StaffProfile;
++import com.kevin.lunaraspa.profiles.repository.CustomerProfileRepository;
++import com.kevin.lunaraspa.profiles.repository.StaffProfileRepository;
++import lombok.RequiredArgsConstructor;
++import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
++import org.springframework.http.ResponseEntity;
++import org.springframework.transaction.annotation.Transactional;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RestController;
++
++import java.util.Locale;
++import java.util.Map;
++import java.util.Set;
++import java.util.UUID;
++
++/**
++ * Đăng nhập giả cho môi trường local/dev, KHÔNG dùng cho production.
++ *
++ * <p>Chỉ tồn tại khi {@code app.dev-login.enabled=true}. Tự tạo tài khoản ảo theo
++ * email + role rồi trả JWT, để test luồng cần quyền (ví dụ nhân viên thu tiền)
++ * mà không phải cấu hình Google OAuth. Không có kiểm tra mật khẩu, nên tuyệt đối
++ * không bật ngoài local.
++ */
++@RestController
++@RequestMapping("/dev/auth")
++@RequiredArgsConstructor
++@ConditionalOnProperty(prefix = "app.dev-login", name = "enabled", havingValue = "true")
++public class DevAuthController {
++
++    private static final Set<String> ALLOWED_ROLES = Set.of(
++            "OWNER", "MANAGER", "RECEPTIONIST", "THERAPIST", "ACCOUNTANT", "CUSTOMER");
++
++    private final AccountRepository accountRepository;
++    private final RoleRepository roleRepository;
++    private final CustomerProfileRepository customerProfileRepository;
++    private final StaffProfileRepository staffProfileRepository;
++    private final JwtUtils jwtUtils;
++
++    @PostMapping("/login")
++    @Transactional
++    public ResponseEntity<Object> login(@RequestBody Map<String, String> request) {
++        String email = normalizeEmail(request.get("email"));
++        String roleCode = normalizeRole(request.get("roleCode"));
++
++        Role role = roleRepository.findByCode(roleCode)
++                .orElseThrow(() -> new AppException(AuthErrorCode.ACCOUNT_NOT_FOUND));
++
++        Account account = accountRepository.findByEmail(email)
++                .map(existing -> updateRole(existing, role))
++                .orElseGet(() -> createAccount(email, role));
++
++        ensureProfile(account, roleCode);
++
++        String accessToken = jwtUtils.generateAccessToken(account.getEmail(), roleCode);
++        String refreshToken = jwtUtils.generateRefreshToken(account.getEmail(), roleCode);
++
++        return ResponseBuilder.ok(Map.of(
++                "accessToken", accessToken,
++                "refreshToken", refreshToken,
++                "email", account.getEmail(),
++                "displayName", account.getDisplayName(),
++                "role", roleCode
++        ), "Dev login successfully");
++    }
++
++    private Account updateRole(Account account, Role role) {
++        account.setRole(role);
++        account.setIsActive(true);
++        return accountRepository.saveAndFlush(account);
++    }
++
++    private Account createAccount(String email, Role role) {
++        String displayName = email.substring(0, email.indexOf('@'));
++        Account account = Account.builder()
++                .email(email)
++                .displayName(displayName)
++                .role(role)
++                .isActive(true)
++                .build();
++        return accountRepository.saveAndFlush(account);
++    }
++
++    private void ensureProfile(Account account, String roleCode) {
++        if ("CUSTOMER".equals(roleCode)) {
++            if (customerProfileRepository.findById(account.getId()).isEmpty()) {
++                customerProfileRepository.saveAndFlush(CustomerProfile.builder()
++                        .account(account)
++                        .phone("")
++                        .build());
++            }
++            return;
++        }
++        if (staffProfileRepository.findById(account.getId()).isEmpty()) {
++            staffProfileRepository.saveAndFlush(StaffProfile.builder()
++                    .account(account)
++                    .employeeCode("DEV-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT))
++                    .jobTitle(roleCode)
++                    .isBookable(true)
++                    .build());
++        }
++    }
++
++    private String normalizeEmail(String email) {
++        if (email == null || email.isBlank() || !email.contains("@")) {
++            throw new AppException(AuthErrorCode.INVALID_TOKEN);
++        }
++        return email.trim().toLowerCase(Locale.ROOT);
++    }
++
++    private String normalizeRole(String roleCode) {
++        if (roleCode == null || roleCode.isBlank()) {
++            throw new AppException(AuthErrorCode.INVALID_TOKEN);
++        }
++        String normalized = roleCode.trim().toUpperCase(Locale.ROOT);
++        if (normalized.startsWith("ROLE_")) {
++            normalized = normalized.substring(5);
++        }
++        if (!ALLOWED_ROLES.contains(normalized)) {
++            throw new AppException(AuthErrorCode.INVALID_TOKEN);
++        }
++        return normalized;
++    }
++}
+diff --git a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java
+index 31d782a..4294167 100644
+--- a/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java
++++ b/backend/src/main/java/com/kevin/lunaraspa/authentication_account/security/SecurityConfig.java
+@@ -29,6 +29,7 @@ public class SecurityConfig {
+     @Bean
+     public SecurityFilterChain securityFilterChain(HttpSecurity http,
+             @Value("${springdoc.api-docs.enabled:false}") boolean openApiEnabled,
++            @Value("${app.dev-login.enabled:false}") boolean devLoginEnabled,
+             @Value("${app.frontend-url}") String frontendUrl,
+             ClientRegistrationRepository clientRegistrationRepository) throws Exception {
+         http
+@@ -46,6 +47,10 @@ public class SecurityConfig {
+                     auth.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
+                             "/v3/api-docs.yaml", "/v3/api-docs/**").permitAll();
+                 }
++                if (devLoginEnabled) {
++                    // Chỉ mở ở local/dev; mặc định tắt nên production không có đường này.
++                    auth.requestMatchers("/dev/**").permitAll();
++                }
+                 auth.requestMatchers("/api/auth/me", "/api/v1/auth/me").authenticated()
+                         .anyRequest().access(customAuthorizationManager);
+             })
+diff --git a/backend/src/main/resources/application.yml b/backend/src/main/resources/application.yml
+index b13bdb4..a9ade8e 100644
+--- a/backend/src/main/resources/application.yml
++++ b/backend/src/main/resources/application.yml
+@@ -61,6 +61,9 @@ springdoc:
+ 
+ app:
+   frontend-url: ${FRONTEND_URL}
++  # Đăng nhập giả cho local/dev, mặc định tắt. Không bật ngoài local.
++  dev-login:
++    enabled: ${APP_DEV_LOGIN_ENABLED:false}
+   mail:
+     enabled: ${MAIL_ENABLED:false}
+     from: ${MAIL_FROM:${MAIL_USERNAME:}}
+diff --git a/frontend/lunara/src/App.tsx b/frontend/lunara/src/App.tsx
+index f24f494..dd39a14 100644
+--- a/frontend/lunara/src/App.tsx
++++ b/frontend/lunara/src/App.tsx
+@@ -16,6 +16,7 @@ const BookingPage = page(() => import('@/pages/BookingPage'), 'BookingPage');
+ const CheckoutPage = page(() => import('@/pages/CheckoutPage'), 'CheckoutPage');
+ const TicketPage = page(() => import('@/pages/TicketPage'), 'TicketPage');
+ const AdminLoginPage = page(() => import('@/pages/admin/AdminLoginPage'), 'AdminLoginPage');
++const DevLoginPage = page(() => import('@/pages/DevLoginPage'), 'DevLoginPage');
+ const AdminLayout = page(() => import('@/components/layout/AdminLayout'), 'AdminLayout');
+ const DashboardPage = page(() => import('@/pages/admin/DashboardPage'), 'DashboardPage');
+ const LivePage = page(() => import('@/pages/admin/LivePage'), 'LivePage');
+@@ -55,6 +56,7 @@ function App() {
+             <Route path="/" element={<LandingPage />} />
+             <Route path="/auth" element={<AuthPage />} />
+             <Route path="/oauth2/redirect" element={<OAuth2RedirectPage />} />
++            <Route path="/dev-login" element={<DevLoginPage />} />
+             <Route path="/booking" element={<BookingPage />} />
+             <Route path="/checkout" element={<CheckoutPage />} />
+             <Route path="/ticket/:id" element={<TicketPage />} />
+diff --git a/frontend/lunara/src/lib/api.ts b/frontend/lunara/src/lib/api.ts
+index 1db734d..1a2f0b8 100644
+--- a/frontend/lunara/src/lib/api.ts
++++ b/frontend/lunara/src/lib/api.ts
+@@ -93,6 +93,31 @@ export function setStoredRefreshToken(token: string | null): void {
+   setCookie(REFRESH_TOKEN_KEY, token, 30);
+ }
+ 
++export interface DevLoginResult {
++  accessToken: string;
++  refreshToken: string;
++  email: string;
++  displayName: string;
++  role: string;
++}
++
++// Đăng nhập giả cho local/dev. Chỉ hoạt động khi backend bật APP_DEV_LOGIN_ENABLED.
++export async function devLogin(email: string, roleCode: string): Promise<DevLoginResult> {
++  const response = await fetch(`${API_ORIGIN}/dev/auth/login`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ email, roleCode }),
++  });
++  const body = await response.json().catch(() => ({}));
++  if (!response.ok) {
++    throw new ApiError(response.status, body?.message || `HTTP ${response.status}`);
++  }
++  const data = (body && typeof body === 'object' && 'data' in body ? body.data : body) as DevLoginResult;
++  setStoredToken(data.accessToken);
++  if (data.refreshToken) setStoredRefreshToken(data.refreshToken);
++  return data;
++}
++
+ function clearStoredTokens(): void {
+   setStoredToken(null);
+   setStoredRefreshToken(null);
+diff --git a/frontend/lunara/src/pages/DevLoginPage.tsx b/frontend/lunara/src/pages/DevLoginPage.tsx
+new file mode 100644
+index 0000000..5a0dd6e
+--- /dev/null
++++ b/frontend/lunara/src/pages/DevLoginPage.tsx
+@@ -0,0 +1,87 @@
++import React, { useState } from 'react';
++import { Link } from 'react-router-dom';
++import { devLogin } from '@/lib/api';
++import { ROLE_HOME } from '@/lib/access-control';
++import type { RoleCode } from '@/types';
++
++const ROLES: RoleCode[] = ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'THERAPIST', 'CUSTOMER'];
++
++const DEV_LOGIN_ENABLED = import.meta.env.VITE_DEV_LOGIN === 'true';
++
++export const DevLoginPage: React.FC = () => {
++  const [email, setEmail] = useState('dev@lunara.local');
++  const [role, setRole] = useState<RoleCode>('OWNER');
++  const [error, setError] = useState('');
++  const [busy, setBusy] = useState(false);
++
++  if (!DEV_LOGIN_ENABLED) {
++    return (
++      <div className="min-h-screen bg-[#F8F9F5] flex items-center justify-center p-6 font-body">
++        <div className="w-full max-w-md rounded-3xl bg-white border border-[#E2E8E3] p-8 text-center space-y-3">
++          <h2 className="font-display text-xl font-semibold text-[#14271C]">Dev login đang tắt</h2>
++          <p className="text-xs text-[#526056]">Đặt VITE_DEV_LOGIN=true khi build frontend để dùng chức năng này.</p>
++          <Link to="/" className="block text-xs text-[#8EAA97] hover:underline">← Quay lại trang chủ</Link>
++        </div>
++      </div>
++    );
++  }
++
++  const submit = async (event: React.FormEvent) => {
++    event.preventDefault();
++    setBusy(true);
++    setError('');
++    try {
++      await devLogin(email.trim(), role);
++      window.location.assign(ROLE_HOME[role] || '/');
++    } catch (e) {
++      setError(e instanceof Error ? e.message : 'Đăng nhập giả thất bại.');
++      setBusy(false);
++    }
++  };
++
++  return (
++    <div className="min-h-screen bg-[#F8F9F5] flex flex-col items-center justify-center p-6 font-body">
++      <Link to="/" className="font-display text-4xl font-semibold text-[#14271C] mb-8">Lunara</Link>
++      <form onSubmit={submit} className="w-full max-w-md rounded-3xl bg-white border border-[#E2E8E3] shadow-luxury p-8 space-y-5">
++        <div className="space-y-1 text-center">
++          <h2 className="font-display text-2xl font-semibold text-[#14271C]">Đăng nhập giả (dev)</h2>
++          <p className="text-xs text-[#526056]">Tạo tài khoản ảo theo email và role. Chỉ dùng ở local.</p>
++        </div>
++
++        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
++
++        <label className="block space-y-1.5">
++          <span className="text-xs font-semibold uppercase tracking-wider text-[#8EAA97]">Email</span>
++          <input
++            type="email"
++            required
++            value={email}
++            onChange={(event) => setEmail(event.target.value)}
++            className="w-full rounded-xl border border-[#D9E5DC] px-3.5 py-2.5 text-sm text-[#14271C] focus:outline-none focus:border-[#1E3B2B]"
++          />
++        </label>
++
++        <label className="block space-y-1.5">
++          <span className="text-xs font-semibold uppercase tracking-wider text-[#8EAA97]">Role</span>
++          <select
++            value={role}
++            onChange={(event) => setRole(event.target.value as RoleCode)}
++            className="w-full rounded-xl border border-[#D9E5DC] px-3.5 py-2.5 text-sm text-[#14271C] focus:outline-none focus:border-[#1E3B2B]"
++          >
++            {ROLES.map((value) => <option key={value} value={value}>{value}</option>)}
++          </select>
++        </label>
++
++        <button
++          type="submit"
++          disabled={busy}
++          className="w-full h-12 rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] font-semibold text-sm disabled:opacity-60"
++        >
++          {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
++        </button>
++
++        <Link to="/" className="block text-xs text-center text-[#8EAA97] hover:underline">← Quay lại trang chủ</Link>
++      </form>
++    </div>
++  );
++};
+diff --git a/frontend/lunara/src/pages/admin/AdminLoginPage.tsx b/frontend/lunara/src/pages/admin/AdminLoginPage.tsx
+index 17f045b..cfc0c4e 100644
+--- a/frontend/lunara/src/pages/admin/AdminLoginPage.tsx
++++ b/frontend/lunara/src/pages/admin/AdminLoginPage.tsx
+@@ -85,6 +85,12 @@ export const AdminLoginPage = () => {
+           Đăng nhập với Google <ArrowRight className="h-4 w-4 ml-2" />
+         </Button>
+ 
++        {import.meta.env.VITE_DEV_LOGIN === 'true' && (
++          <Link to="/dev-login" className="block text-xs text-[#8EAA97] hover:underline">
++            Đăng nhập giả (dev)
++          </Link>
++        )}
++
+         <Link to="/" className="block text-xs text-[#8EAA97] hover:underline">← Quay lại trang chủ</Link>
+       </div>
+     </div>
+diff --git a/templates/.env.example b/templates/.env.example
+index b7846b0..75ee030 100644
+--- a/templates/.env.example
++++ b/templates/.env.example
+@@ -51,6 +51,13 @@ CHROMA_STARTUP_INDEXING=false
+ CHROMA_UPSERT_BATCH_SIZE=100
+ FRONTEND_URL=http://localhost:5173
+ 
++# Đăng nhập giả cho local/dev. Mặc định tắt; đặt true để test luồng cần quyền
++# mà không cần Google. TUYỆT ĐỐI không bật ở production: endpoint /dev/auth/login
++# tạo tài khoản không mật khẩu.
++APP_DEV_LOGIN_ENABLED=false
++
+ # --- Frontend React (service: frontend) ---
+ FRONTEND_PORT=5173
+ VITE_API_URL=http://localhost:8080
++# Hiện form đăng nhập giả trên UI. Mặc định tắt; chốt lúc build, đổi thì build lại.
++VITE_DEV_LOGIN=false
+diff --git a/templates/Dockerfile.frontend b/templates/Dockerfile.frontend
+index a9777ae..059a975 100644
+--- a/templates/Dockerfile.frontend
++++ b/templates/Dockerfile.frontend
+@@ -10,7 +10,9 @@
+ FROM node:22-alpine AS build
+ WORKDIR /workspace
+ ARG VITE_API_URL=http://localhost:8080
++ARG VITE_DEV_LOGIN=false
+ ENV VITE_API_URL=$VITE_API_URL
++ENV VITE_DEV_LOGIN=$VITE_DEV_LOGIN
+ COPY frontend/lunara/package.json frontend/lunara/package-lock.json frontend/lunara/
+ RUN cd frontend/lunara && npm ci
+ COPY frontend/lunara frontend/lunara/
+diff --git a/templates/docker-compose.yml b/templates/docker-compose.yml
+index 6edf11b..2456d6e 100644
+--- a/templates/docker-compose.yml
++++ b/templates/docker-compose.yml
+@@ -130,6 +130,7 @@ services:
+       CHROMA_STARTUP_INDEXING: ${CHROMA_STARTUP_INDEXING:-false}
+       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+       KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-lunara-api}
++      APP_DEV_LOGIN_ENABLED: ${APP_DEV_LOGIN_ENABLED:-false}
+     depends_on:
+       db:
+         condition: service_healthy
+@@ -148,6 +149,7 @@ services:
+       dockerfile: templates/Dockerfile.frontend
+       args:
+         VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
++        VITE_DEV_LOGIN: ${VITE_DEV_LOGIN:-false}
+     ports:
+       - "${FRONTEND_PORT:-5173}:80"
+     depends_on:
