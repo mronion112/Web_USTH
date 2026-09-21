@@ -30,6 +30,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-lunara_spa}
       MYSQL_USER: ${MYSQL_USER:-lunara}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?thiếu trong .env}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:
@@ -114,6 +115,7 @@ services:
       start_period: 60s
     env_file: .env
     environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://db:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-lunara}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?thiếu trong .env}

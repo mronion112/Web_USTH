@@ -21,6 +21,9 @@ RUN --mount=type=cache,target=/root/.m2 \
     ./backend/mvnw -B -f backend/pom.xml package -DskipTests
 
 FROM eclipse-temurin:21-jre
+# Múi giờ cố định theo quy ước dự án (email ICS, frontend format đều dùng VN).
+# Không set thì JVM mặc định UTC, timestamp do server sinh sẽ lệch 7 giờ.
+ENV TZ=Asia/Ho_Chi_Minh
 WORKDIR /app
 COPY --from=build /workspace/backend/target/*.jar app.jar
 COPY docs /app/docs
