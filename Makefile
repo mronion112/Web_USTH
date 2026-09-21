@@ -23,7 +23,7 @@ BASELINE ?= origin/main
 DEV_LOGIN_PATHS = backend/src frontend/lunara/src templates/docker-compose.yml templates/Dockerfile.frontend templates/.env.example
 DEV_LOGIN_PATTERN = DEV_LOGIN_PATCH_MARKER|DevAuthController|DevLoginPage|/dev/auth/login|APP_DEV_LOGIN_ENABLED|VITE_DEV_LOGIN
 
-.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra verify-no-dev-login dev-login-on dev-login-off dev-login-apply dev-login-revert dev-login-env-on dev-login-env-off
+.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra verify-no-dev-login verify-dev-login-patch dev-login-on dev-login-off dev-login-apply dev-login-revert dev-login-env-on dev-login-env-off
 
 help:
 	@echo "Targets:"
@@ -45,6 +45,7 @@ help:
 	@echo "  test-backend Chạy test backend với factory override (bỏ qua nếu chưa có code)"
 	@echo "  verify-infra Liệt kê file hạ tầng đổi khác so với baseline"
 	@echo "  verify-no-dev-login Chặn nếu patch dev-login đang được áp"
+	@echo "  verify-dev-login-patch Chặn nếu patch dev-login không còn áp được"
 	@echo "  dev-login-on  Áp patch dev-login, bật biến, chạy full stack"
 	@echo "  dev-login-off Gỡ patch dev-login, tắt biến, chạy full stack"
 
@@ -227,3 +228,34 @@ dev-login-env-off: check-env
 	@$(call set_env,APP_DEV_LOGIN_ENABLED,false)
 	@$(call set_env,VITE_DEV_LOGIN,false)
 	@echo "Đã tắt APP_DEV_LOGIN_ENABLED và VITE_DEV_LOGIN trong $(ENV_FILE)"
+
+# Danh sách file patch dev-login được phép đụng tới (không gồm file hạ tầng).
+DEV_LOGIN_ALLOWED_PATHS = \
+	backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java \
+	backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java \
+	backend/src/main/resources/application.yml \
+	frontend/lunara/src/App.tsx \
+	frontend/lunara/src/lib/api.ts \
+	frontend/lunara/src/pages/DevLoginPage.tsx \
+	frontend/lunara/src/pages/admin/AdminLoginPage.tsx \
+	templates/.env.example \
+	templates/Dockerfile.frontend \
+	templates/docker-compose.yml
+
+# Chặn khi patch dev-login không còn áp được lên main (upstream đổi làm lệch context).
+verify-dev-login-patch:
+	@test -f $(DEV_LOGIN_PATCH) || (echo "Thiếu $(DEV_LOGIN_PATCH)" >&2; exit 1)
+	@if git grep --untracked -qE "DEV_LOGIN_PATCH_MARKER" -- $(DEV_LOGIN_CODE_PATHS) 2>/dev/null; then \
+		echo "Patch đang áp, bỏ qua kiểm tra apply."; exit 0; \
+	fi; \
+	bad=""; \
+	for p in $$(git apply --numstat $(DEV_LOGIN_PATCH) | awk '{print $$3}'); do \
+		case " $(DEV_LOGIN_ALLOWED_PATHS) " in *" $$p "*) ;; *) bad="$$bad $$p";; esac; \
+	done; \
+	if [ -n "$$bad" ]; then echo "Patch đụng file ngoài danh sách cho phép:$$bad" >&2; exit 1; fi; \
+	if git apply --check $(DEV_LOGIN_PATCH) 2>/tmp/dev-login-apply.err; then \
+		echo "Patch áp được trên cây hiện tại."; \
+	else \
+		echo "Patch dev-login đã lệch so với main, cần tái tạo (xem templates/dev-login/README.md):" >&2; \
+		cat /tmp/dev-login-apply.err >&2; exit 1; \
+	fi

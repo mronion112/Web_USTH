@@ -207,3 +207,31 @@ jobs:
             exit 1
           fi
           echo "Không có dấu vết dev-login."
+
+  dev-login-patch-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chặn patch dev-login lệch main
+        run: |
+          PATCH=templates/dev-login/dev-login.patch
+          if git grep -qE "DEV_LOGIN_PATCH_MARKER" -- backend/src frontend/lunara/src; then
+            echo "Patch đang áp trong commit; dev-login-guard sẽ chặn, bỏ qua kiểm tra apply."
+            exit 0
+          fi
+          ALLOWED="backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java backend/src/main/resources/application.yml frontend/lunara/src/App.tsx frontend/lunara/src/lib/api.ts frontend/lunara/src/pages/DevLoginPage.tsx frontend/lunara/src/pages/admin/AdminLoginPage.tsx templates/.env.example templates/Dockerfile.frontend templates/docker-compose.yml"
+          BAD=""
+          for p in $(git apply --numstat "$PATCH" | awk '{print $3}'); do
+            case " $ALLOWED " in *" $p "*) ;; *) BAD="$BAD $p";; esac
+          done
+          if [ -n "$BAD" ]; then
+            echo "Patch đụng file ngoài danh sách cho phép:$BAD" >&2
+            exit 1
+          fi
+          if git apply --check "$PATCH"; then
+            echo "Patch áp được."
+          else
+            echo "Patch dev-login đã lệch so với main, cần tái tạo (xem templates/dev-login/README.md)." >&2
+            exit 1
+          fi

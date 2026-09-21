@@ -25,7 +25,9 @@ hoặc `Account not found`.
   Mặc định `false`; bật ở production là lỗ hổng bảo mật vì không có mật khẩu.
 - Frontend: trang `/dev-login` + link ở trang login admin, chỉ hiện khi
   `VITE_DEV_LOGIN=true`.
-- Hai file mới mang marker `DEV_LOGIN_PATCH_MARKER` để guard nhận diện.
+- `DevSecurityConfig` mở riêng `/dev/**` bằng một `SecurityFilterChain` (`@Order(-1)`)
+  nên **không sửa `SecurityConfig`** — giảm lệch khi upstream đổi authz.
+- Ba file mới mang marker `DEV_LOGIN_PATCH_MARKER` để guard nhận diện.
 
 ## Sau khi áp patch có tự chạy không?
 
@@ -47,6 +49,17 @@ Sau khi `make dev-login-off`, cũng nên `make up-app` để image không còn c
   trong `backend/src`, `frontend/lunara/src` hoặc các file config hạ tầng.
 - Local: `make verify-no-dev-login` kiểm tra tương tự, kể cả file chưa add.
 - Nếu guard fail: `make dev-login-off` (hoặc `git apply -R templates/dev-login/dev-login.patch`).
+
+## Patch lệch khi main đổi
+
+Patch được sinh bằng `git diff -U1` để ít lệch, nhưng upstream vẫn có thể sửa
+`application.yml` hoặc `App.tsx` làm patch không áp được nữa.
+
+- Local: `make verify-dev-login-patch` fail nếu patch không còn `git apply --check` được,
+  hoặc nếu patch đụng file ngoài danh sách cho phép (không được chạm `Makefile`,
+  `.github/`, `database/`...).
+- CI: job `dev-login-patch-guard` chạy mọi push/PR, fail khi patch lệch.
+- Khi fail: tái tạo patch theo hướng dẫn bên dưới, rồi commit lại.
 
 ## Lệnh make
 
@@ -97,6 +110,16 @@ git apply -R templates/dev-login/dev-login.patch
 
 hoặc `git checkout -- <đường-dẫn>` và xoá 2 file mới
 `DevAuthController.java`, `DevLoginPage.tsx`.
+
+## Tái tạo patch khi lệch
+
+1. Áp các file còn khớp từ patch cũ, rồi chỉnh tay các file bị lệch theo nội dung mới của `main`.
+2. Sinh lại patch, giới hạn đúng 10 đường dẫn của patch:
+   ```sh
+   git diff -U1 -- <10 đường-dẫn> > templates/dev-login/dev-login.patch
+   ```
+3. Kiểm chứng: `make verify-dev-login-patch` pass; áp patch rồi `mvn test` và `npm run build`.
+4. Commit lại patch.
 
 ## Kiểm chứng khi áp
 
