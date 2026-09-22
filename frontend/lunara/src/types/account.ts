@@ -11,6 +11,7 @@ export interface Account {
   lastLoginAt?: string;
 }
 
+/** Thông tin chi tiết hồ sơ khách hàng */
 export interface CustomerProfile {
   accountId: string;
   phone?: string;
@@ -21,6 +22,7 @@ export interface CustomerProfile {
   lastVisit?: string;
 }
 
+/** Thông tin chi tiết hồ sơ kỹ thuật viên/nhân viên */
 export interface StaffProfile {
   accountId: string;
   employeeCode: string;
