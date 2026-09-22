@@ -291,6 +291,8 @@ export interface ApiService {
   displayOrder?: number;
   isActive?: boolean;
   active?: boolean;
+  staff?: { accountId: number; displayName: string }[];
+  staffAccountIds?: number[];
 }
 
 export const servicesApi = {
@@ -331,6 +333,7 @@ export interface ApiBookingSearch {
   customerName: string;
   staffAccountId?: number;
   staffName?: string;
+  serviceNames?: string[];
   bookingStart: string;
   bookingEnd: string;
   totalAmount: number;
@@ -362,6 +365,7 @@ export const bookingsApi = {
     to: string;
     items: { serviceId: number; durationMinutes: number }[];
     staffAccountId?: number;
+    excludedBookingId?: number;
   }, signal?: AbortSignal) => api<AvailabilityResponse>('/api/availability', {
     method: 'POST',
     body: JSON.stringify(req),

@@ -19,7 +19,7 @@ class AvailabilityServiceTest {
     @InjectMocks AvailabilityServiceImpl service;
 
     @Test
-    void returnsQualifiedFreeSlotsAndAppliesPreparationAndCleanupBuffers() {
+    void returnsQualifiedFreeSlotsAndExcludesCurrentBookingFromOverlapCheck() {
         LocalDateTime start = LocalDateTime.now().plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
         ServiceSnapshotProjection snapshot = mock(ServiceSnapshotProjection.class);
         when(snapshot.getId()).thenReturn(1L);
@@ -35,7 +35,9 @@ class AvailabilityServiceTest {
 
         AvailabilityRequest request = AvailabilityRequest.builder()
                 .items(List.of(BookingItemRequest.builder().serviceId(1L).durationMinutes(60).build()))
-                .from(start).to(start.plusHours(1)).build();
+                .from(start).to(start.plusHours(1))
+                .excludedBookingId(99L)
+                .build();
         var result = service.findAvailability(request);
 
         assertEquals(1, result.getSlots().size());
@@ -47,6 +49,6 @@ class AvailabilityServiceTest {
                 start.plusMinutes(75).toLocalTime()
         );
         verify(repository).countOverlappingTimeOff(21L, start.minusMinutes(10), start.plusMinutes(75));
-        verify(repository).countOverlappingBookings(21L, start.minusMinutes(10), start.plusMinutes(75), null);
+        verify(repository).countOverlappingBookings(21L, start.minusMinutes(10), start.plusMinutes(75), 99L);
     }
 }

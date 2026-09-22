@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { AvailabilitySlotPicker } from '@/components/booking/AvailabilitySlotPicker';
 import { Star, Clock, Calendar, Sparkles, Home } from 'lucide-react';
 import { SuccessCheck } from '@/components/transitions/SuccessCheck';
 import { bookingsApi, api, ApiBooking, ApiPayment, paymentsApi, PublicStaff, json, staffDirectoryApi } from '@/lib/api';
@@ -67,16 +67,6 @@ export const TicketPage: React.FC = () => {
     if (!booking || !rescheduleStart) return;
     try {
       const requested = rescheduleStart.length === 16 ? `${rescheduleStart}:00` : rescheduleStart;
-      const items = booking.items.map((item) => ({ serviceId: Number(item.serviceId), durationMinutes: item.durationMinutes }));
-      const end = new Date(requested);
-      end.setMinutes(end.getMinutes() + booking.totalDurationMinutes + 1);
-      const endLocal = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-        + `T${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}:00`;
-      const availability = await bookingsApi.getAvailability({ from: requested, to: endLocal,
-        items, staffAccountId: newStaffId ? Number(newStaffId) : undefined });
-      const available = availability.slots.some((slot) => slot.bookingStart.slice(0, 16) === requested.slice(0, 16)
-        && (!newStaffId || Number(slot.staffAccountId) === Number(newStaffId)));
-      if (!available) throw new Error('Khung giờ hoặc kỹ thuật viên đã chọn không còn khả dụng.');
       await bookingsApi.reschedule(booking.bookingCode, requested, newStaffId ? Number(newStaffId) : undefined);
       await reload();
       setRequestSent(true);
@@ -187,7 +177,20 @@ export const TicketPage: React.FC = () => {
 
           {booking.status === 'CONFIRMED' && <div className="pt-4 border-t border-[#E2E8E3] space-y-2">
             <h3 className="text-xs font-bold text-[#14271C]">Cần đổi lịch?</h3>
-            {requestSent ? <p className="text-xs text-[#2E7D32]">Lịch hẹn đã được cập nhật thành công.</p> : <><Input type="datetime-local" value={rescheduleStart} onChange={(e) => setRescheduleStart(e.target.value)} /><Select value={newStaffId} onChange={(e) => setNewStaffId(e.target.value)}><option value="">Tự động / giữ kỹ thuật viên hiện tại</option>{staff.map((person) => <option key={person.accountId} value={String(person.accountId)}>{person.displayName}</option>)}</Select><Button variant="outline" disabled={!rescheduleStart} onClick={() => void requestReschedule()} className="text-xs">Cập nhật lịch hẹn</Button></>}
+            {requestSent ? <p className="text-xs text-[#2E7D32]">Lịch hẹn đã được cập nhật thành công.</p> : <>
+              <Select value={newStaffId} onChange={(e) => { setNewStaffId(e.target.value); setRescheduleStart(''); }}>
+                <option value="">Tự động / giữ kỹ thuật viên hiện tại</option>
+                {staff.map((person) => <option key={person.accountId} value={String(person.accountId)}>{person.displayName}</option>)}
+              </Select>
+              <AvailabilitySlotPicker
+                items={booking.items.map((item) => ({ serviceId: Number(item.serviceId), durationMinutes: item.durationMinutes }))}
+                staffAccountId={newStaffId ? Number(newStaffId) : booking.staffAccountId}
+                excludedBookingId={booking.id}
+                value={rescheduleStart}
+                onChange={setRescheduleStart}
+              />
+              <Button variant="outline" disabled={!rescheduleStart} onClick={() => void requestReschedule()} className="text-xs">Cập nhật lịch hẹn</Button>
+            </>}
           </div>}
 
           {/* FRAME 06: Service Rating & Feedback Section (Only if completed) */}

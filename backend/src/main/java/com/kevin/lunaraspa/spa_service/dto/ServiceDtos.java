@@ -16,5 +16,5 @@ public final class ServiceDtos {
                                        BigDecimal basePrice, Integer minimumDurationMinutes,
                                        Boolean isDurationAdjustable, Integer durationStepMinutes,
                                        BigDecimal pricePerDurationStep, Integer preparationBufferMinutes,
-                                       Integer cleanupBufferMinutes) {}
+                                       Integer cleanupBufferMinutes, List<Long> staffAccountIds) {}
 }

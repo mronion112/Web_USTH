@@ -670,6 +670,7 @@ public class BookingServiceImpl implements BookingService {
                 .customerName(booking.getCustomerNameSnapshot()).staffAccountId(booking.getStaffAccountId())
                 .staffName(booking.getStaffAccountId() == null ? null
                         : bookingRepository.findAccountDisplayName(booking.getStaffAccountId()).orElse(null))
+                .serviceNames(booking.getItems().stream().map(BookingItem::getServiceNameSnapshot).toList())
                 .bookingStart(booking.getBookingStart()).bookingEnd(booking.getBookingEnd())
                 .totalAmount(booking.getTotalAmount()).build();
     }

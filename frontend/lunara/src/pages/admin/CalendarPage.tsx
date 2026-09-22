@@ -12,6 +12,30 @@ const spaToday = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
 
+const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const bookingRange = (selectedDate: Date, viewMode: 'day' | 'week' | 'month') => {
+  let from = new Date(selectedDate);
+  from.setHours(0, 0, 0, 0);
+  let to: Date;
+  if (viewMode === 'week') {
+    from = addDays(from, -((from.getDay() + 6) % 7));
+    to = addDays(from, 7);
+  } else if (viewMode === 'month') {
+    from = new Date(from.getFullYear(), from.getMonth(), 1);
+    to = new Date(from.getFullYear(), from.getMonth() + 1, 1);
+  } else {
+    to = addDays(from, 1);
+  }
+  return { from: `${localDateKey(from)}T00:00:00`, to: `${localDateKey(to)}T00:00:00` };
+};
+
 interface CalendarBooking {
   start: string;
   duration: number; // in hours
@@ -32,9 +56,9 @@ export const CalendarPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(`${spaToday()}T12:00:00`));
-  const [selectedMonthDay, setSelectedMonthDay] = useState<number>(() => Number(spaToday().slice(8, 10)));
   const [successMsg, setSuccessMsg] = useState('');
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Real data
   const [bookings, setBookings] = useState<ApiBookingSearch[]>([]);
@@ -52,14 +76,35 @@ export const CalendarPage: React.FC = () => {
   const hours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
   const reloadData = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
     try {
-      const [bookingsRes, servicesRes, accountsRes] = await Promise.all([
-        bookingsApi.search({ size: 100 }, signal),
+      const range = bookingRange(selectedDate, viewMode);
+      const firstBookingsPage = await bookingsApi.search({
+        ...range,
+        page: 0,
+        size: 100,
+        sortBy: 'BOOKING_START',
+        sortDirection: 'ASC',
+      }, signal);
+      const remainingPages = firstBookingsPage.totalPages > 1
+        ? await Promise.all(Array.from({ length: firstBookingsPage.totalPages - 1 }, (_, index) =>
+          bookingsApi.search({
+            ...range,
+            page: index + 1,
+            size: 100,
+            sortBy: 'BOOKING_START',
+            sortDirection: 'ASC',
+          }, signal)))
+        : [];
+      const [servicesRes, accountsRes] = await Promise.all([
         servicesApi.getAll(),
         staffDirectoryApi.getAll(),
       ]);
 
-      if (bookingsRes?.content) setBookings(bookingsRes.content);
+      setBookings([
+        ...(firstBookingsPage.content || []),
+        ...remainingPages.flatMap((page) => page.content || []),
+      ]);
       if (Array.isArray(servicesRes)) {
         setServices(servicesRes);
         if (servicesRes.length > 0 && !formServiceId) setFormServiceId(Number(servicesRes[0].id));
@@ -68,52 +113,79 @@ export const CalendarPage: React.FC = () => {
         setStaffList(accountsRes);
         if (accountsRes.length > 0 && !formStaffId) setFormStaffId(Number(accountsRes[0].accountId));
       }
+      setLoadError('');
     } catch (err) {
       console.error('Failed to load calendar data:', err);
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setLoadError(err instanceof Error ? err.message : 'Không tải được dữ liệu lịch biểu.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [formServiceId, formStaffId]);
+  }, [formServiceId, formStaffId, selectedDate, viewMode]);
 
-  useRefresh('calendar', reloadData);
+  useRefresh('calendar', reloadData, true, `${viewMode}|${localDateKey(selectedDate)}`);
 
   // Construct staff rows for Day view
-  const staffRows: StaffScheduleRow[] = staffList.slice(0, 6).map((st) => {
-    // Filter bookings for this staff on selectedDate
-    const staffBookings = bookings.filter((b) => {
+  const selectedDayBookings = bookings.filter((b) => {
       const bDate = new Date(b.bookingStart);
-      const isSameDay =
+      return (
         bDate.getDate() === selectedDate.getDate() &&
         bDate.getMonth() === selectedDate.getMonth() &&
-        bDate.getFullYear() === selectedDate.getFullYear();
-      return isSameDay && (b.staffAccountId === Number(st.accountId)
-        || (!b.staffAccountId && Number(st.accountId) === Number(staffList[0]?.accountId)));
+        bDate.getFullYear() === selectedDate.getFullYear()
+      );
     });
 
-    const mappedBookings: CalendarBooking[] = staffBookings.map((b) => {
-      const bStart = new Date(b.bookingStart);
-      const bEnd = new Date(b.bookingEnd);
-      const durationHours = Math.max(1, (bEnd.getTime() - bStart.getTime()) / 3600000);
-      const hh = String(bStart.getHours()).padStart(2, '0');
-      const mm = String(bStart.getMinutes()).padStart(2, '0');
+  const knownStaffIds = new Set(staffList.map((staff) => Number(staff.accountId)));
+  const historicalStaff = selectedDayBookings
+    .filter((booking) => booking.staffAccountId && !knownStaffIds.has(Number(booking.staffAccountId)))
+    .map((booking) => ({
+      accountId: Number(booking.staffAccountId),
+      displayName: booking.staffName || `KTV #${booking.staffAccountId}`,
+      jobTitle: 'Kỹ thuật viên',
+    }))
+    .filter((staff, index, all) => all.findIndex((item) => item.accountId === staff.accountId) === index);
 
-      return {
-        start: `${hh}:${mm}`,
-        duration: durationHours,
-        service: 'Trị liệu',
-        client: b.customerName,
-        code: `#${b.bookingCode}`,
-        status: b.status,
-      };
-    });
+  const rowStaff = [...staffList, ...historicalStaff];
+
+  const mapBookings = (staffBookings: ApiBookingSearch[]): CalendarBooking[] => staffBookings.map((b) => {
+    const bStart = new Date(b.bookingStart);
+    const bEnd = new Date(b.bookingEnd);
+    const durationHours = Math.max(0.5, (bEnd.getTime() - bStart.getTime()) / 3600000);
+    const hh = String(bStart.getHours()).padStart(2, '0');
+    const mm = String(bStart.getMinutes()).padStart(2, '0');
+
+    return {
+      start: `${hh}:${mm}`,
+      duration: durationHours,
+      service: b.serviceNames?.join(', ') || 'Dịch vụ spa',
+      client: b.customerName,
+      code: `#${b.bookingCode}`,
+      status: b.status,
+    };
+  });
+
+  const staffRows: StaffScheduleRow[] = rowStaff.map((st) => {
+    const staffBookings = selectedDayBookings.filter((booking) =>
+      Number(booking.staffAccountId) === Number(st.accountId));
 
     return {
       id: Number(st.accountId),
       name: st.displayName,
       role: st.jobTitle || 'Chuyên viên trị liệu',
-      bookings: mappedBookings,
+      bookings: mapBookings(staffBookings),
     };
   });
+
+  const unassignedBookings = selectedDayBookings.filter((booking) => !booking.staffAccountId);
+  if (unassignedBookings.length > 0) {
+    staffRows.unshift({
+      id: -1,
+      name: 'Chưa phân công',
+      role: 'Cần gán kỹ thuật viên',
+      bookings: mapBookings(unassignedBookings),
+    });
+  }
 
   // Construct appointments for Week view (Mon - Sun of current week)
   const currentMonday = new Date(selectedDate);
@@ -144,7 +216,7 @@ export const CalendarPage: React.FC = () => {
       return {
         time: `${formatTime(bStart)} - ${formatTime(bEnd)}`,
         client: b.customerName,
-        service: 'Trị liệu',
+        service: b.serviceNames?.join(', ') || 'Dịch vụ spa',
         staff: b.staffName || 'Chưa gán',
         code: `#${b.bookingCode}`,
       };
@@ -254,7 +326,8 @@ export const CalendarPage: React.FC = () => {
             size="sm"
             onClick={() => {
               const d = new Date(selectedDate);
-              d.setDate(d.getDate() - (viewMode === 'week' ? 7 : 1));
+              if (viewMode === 'month') d.setMonth(d.getMonth() - 1);
+              else d.setDate(d.getDate() - (viewMode === 'week' ? 7 : 1));
               setSelectedDate(d);
             }}
             className="h-8 w-8 p-0 rounded-lg"
@@ -274,7 +347,8 @@ export const CalendarPage: React.FC = () => {
             size="sm"
             onClick={() => {
               const d = new Date(selectedDate);
-              d.setDate(d.getDate() + (viewMode === 'week' ? 7 : 1));
+              if (viewMode === 'month') d.setMonth(d.getMonth() + 1);
+              else d.setDate(d.getDate() + (viewMode === 'week' ? 7 : 1));
               setSelectedDate(d);
             }}
             className="h-8 w-8 p-0 rounded-lg"
@@ -291,6 +365,10 @@ export const CalendarPage: React.FC = () => {
         </button>
       </div>
 
+      {loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{loadError}</div>
+      )}
+
       {/* Day View: Timeline Grid */}
       {viewMode === 'day' && (
         <Card className="overflow-hidden border border-[#E2E8E3] shadow-luxury">
@@ -304,6 +382,10 @@ export const CalendarPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-[#E2E8E3]">
+            {loading && <div className="p-8 text-center text-xs text-[#6B726C]">Đang tải lịch hẹn…</div>}
+            {!loading && !loadError && selectedDayBookings.length === 0 && (
+              <div className="p-8 text-center text-xs text-[#6B726C]">Ngày này chưa có lịch hẹn.</div>
+            )}
             {staffRows.map((staff) => (
               <div key={staff.id} className="flex items-center p-3 hover:bg-[#FAFBF9] transition-colors">
                 <div className="w-48 shrink-0 pr-4">
@@ -325,8 +407,8 @@ export const CalendarPage: React.FC = () => {
                         className="absolute top-1.5 bottom-1.5 rounded-lg bg-[#1E3B2B] text-white p-2 shadow-xs flex flex-col justify-center overflow-hidden cursor-pointer hover:bg-[#14271C] transition-colors"
                       >
                         <div className="font-semibold text-[11px] truncate">{b.client}</div>
-                        <div className="text-[10px] text-[#C5A880] truncate">
-                          {b.start} · {b.code}
+                        <div className="text-[10px] text-[#C5A880] truncate" title={`${b.service} · ${b.code}`}>
+                          {b.service} · {b.start}
                         </div>
                       </div>
                     );
@@ -388,15 +470,22 @@ export const CalendarPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-7 gap-2">
-            {Array.from({ length: 30 }).map((_, i) => {
+            {Array.from({ length: new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
               const dayNum = i + 1;
-              const countOnDay = bookings.filter((b) => new Date(b.bookingStart).getDate() === dayNum).length;
-              const isSelected = selectedMonthDay === dayNum;
+              const countOnDay = bookings.filter((b) => {
+                const bookingDate = new Date(b.bookingStart);
+                return bookingDate.getFullYear() === selectedDate.getFullYear()
+                  && bookingDate.getMonth() === selectedDate.getMonth()
+                  && bookingDate.getDate() === dayNum;
+              }).length;
+              const isSelected = selectedDate.getDate() === dayNum;
 
               return (
                 <div
                   key={dayNum}
-                  onClick={() => setSelectedMonthDay(dayNum)}
+                  onClick={() => {
+                    setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), dayNum, 12));
+                  }}
                   className={`p-3 rounded-xl border text-xs min-h-[70px] flex flex-col justify-between cursor-pointer transition-all ${
                     isSelected
                       ? 'border-[#1E3B2B] bg-[#E8F5E9]/30 ring-1 ring-[#1E3B2B]'
