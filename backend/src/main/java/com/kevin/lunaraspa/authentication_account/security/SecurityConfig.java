@@ -37,7 +37,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll();
                 auth.requestMatchers("/api/auth/refresh-token", "/api/auth/logout", "/api/auth/exchange",
-                        "/oauth2/**", "/api/v1/chatbot/**").permitAll();
+                        "/oauth2/**", "/api/v1/chatbot/**", "/api/payments/sepay/webhook").permitAll();
                 if (openApiEnabled) {
                     auth.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
                             "/v3/api-docs.yaml", "/v3/api-docs/**").permitAll();
