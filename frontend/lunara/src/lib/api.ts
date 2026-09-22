@@ -8,6 +8,8 @@ export function getApiOrigin(): string {
   return API_ORIGIN;
 }
 
+import { toast } from 'sonner';
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -162,6 +164,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
     const message = errorBody.message || `HTTP ${response.status}: ${response.statusText}`;
+    if (response.status !== 401) { toast.error(message); }
     throw new ApiError(response.status, message);
   }
 

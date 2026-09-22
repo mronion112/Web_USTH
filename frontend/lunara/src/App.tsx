@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { Toaster } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { canAccessAdminRoute, ROLE_HOME } from '@/lib/access-control';
 
@@ -48,6 +49,7 @@ function RoleHomeRedirect() {
 function App() {
   return (
     <AuthProvider>
+      <Toaster richColors position="top-right" />
       <TooltipProvider>
         <BrowserRouter>
           <Suspense fallback={<div className="p-8">Đang tải…</div>}>
