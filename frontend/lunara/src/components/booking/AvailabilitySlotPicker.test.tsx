@@ -21,6 +21,8 @@ describe('AvailabilitySlotPicker', () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-22T12:00:00'));
     container = document.createElement('div');
     document.body.appendChild(container);
     mockGetAvailability.mockResolvedValue({
@@ -30,6 +32,7 @@ describe('AvailabilitySlotPicker', () => {
 
   afterEach(() => {
     document.body.removeChild(container);
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 

@@ -30,6 +30,7 @@ import com.kevin.lunaraspa.booking.repository.ServiceSnapshotProjection;
 import com.kevin.lunaraspa.booking.service.BookingService;
 import com.kevin.lunaraspa.core.exception.AppException;
 import com.kevin.lunaraspa.core.common.model.response.PageableResponse;
+import com.kevin.lunaraspa.core.validation.PhoneNumberValidator;
 import com.kevin.lunaraspa.profiles.entity.CustomerProfile;
 import com.kevin.lunaraspa.profiles.repository.CustomerProfileRepository;
 import com.kevin.lunaraspa.realtime.RealtimeEventPublisher;
@@ -78,6 +79,14 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED);
         }
 
+        String phone = requireValidPhone(request.getCustomerPhone() == null
+                ? customerProfile.getPhone() : request.getCustomerPhone());
+        request.setCustomerPhone(phone);
+        if (!phone.equals(customerProfile.getPhone())) {
+            customerProfile.setPhone(phone);
+            customerProfileRepository.saveAndFlush(customerProfile);
+        }
+
         return persistBooking(request, customer, customer.getId());
     }
 
@@ -91,7 +100,10 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED,
                     "Customer name and phone are required");
         }
+        String phone = requireValidPhone(request.getCustomerPhone());
+        request.setCustomerPhone(phone);
         CreateBookingRequest bookingRequest = CreateBookingRequest.builder()
+                .customerPhone(phone)
                 .bookingStart(request.getBookingStart()).staffAccountId(request.getStaffAccountId())
                 .customerNote(request.getCustomerNote()).items(request.getItems()).build();
         validateCreateRequest(bookingRequest);
@@ -111,6 +123,11 @@ public class BookingServiceImpl implements BookingService {
                 throw new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED,
                         "The matched account is not a customer");
             }
+            CustomerProfile profile = customer.getCustomerProfile();
+            if (!phone.equals(profile.getPhone())) {
+                profile.setPhone(phone);
+                customerProfileRepository.saveAndFlush(profile);
+            }
             return customer;
         }
         var customerRole = roleRepository.findByCodeIgnoreCase("CUSTOMER")
@@ -127,7 +144,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private CreateBookingResponse persistBooking(CreateBookingRequest request, Account customer, Long creatorId) {
-        CustomerProfile customerProfile = customer.getCustomerProfile();
         List<PricedItem> pricedItems = priceItems(request.getItems());
         int totalDuration = pricedItems.stream()
                 .mapToInt(item -> item.request().getDurationMinutes())
@@ -161,7 +177,7 @@ public class BookingServiceImpl implements BookingService {
                 .assignmentSource(assignmentSource)
                 .customerNameSnapshot(customer.getDisplayName())
                 .customerEmailSnapshot(customer.getEmail())
-                .customerPhoneSnapshot(normalizeText(customerProfile.getPhone()))
+                .customerPhoneSnapshot(requireValidPhone(request.getCustomerPhone()))
                 .bookingStart(request.getBookingStart())
                 .bookingEnd(bookingEnd)
                 .customerNote(normalizeText(request.getCustomerNote()))
@@ -309,7 +325,8 @@ public class BookingServiceImpl implements BookingService {
             String pattern = "%" + code.trim().toLowerCase(Locale.ROOT) + "%";
             specification = specification.and((root, query, cb) -> cb.or(
                     cb.like(cb.lower(root.get("bookingCode")), pattern),
-                    cb.like(cb.lower(root.get("customerNameSnapshot")), pattern)));
+                    cb.like(cb.lower(root.get("customerNameSnapshot")), pattern),
+                    cb.like(cb.lower(root.get("customerPhoneSnapshot")), pattern)));
         }
         BookingSortField safeSortBy = sortBy == null ? BookingSortField.BOOKING_START : sortBy;
         Sort.Direction safeDirection = sortDirection == null ? Sort.Direction.DESC : sortDirection;
@@ -434,6 +451,9 @@ public class BookingServiceImpl implements BookingService {
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new AppException(BookingFeatureErrorCode.ITEMS_REQUIRED);
         }
+        if (request.getCustomerPhone() != null) {
+            request.setCustomerPhone(requireValidPhone(request.getCustomerPhone()));
+        }
 
         Set<Long> serviceIds = new HashSet<>();
         for (BookingItemRequest item : request.getItems()) {
@@ -445,6 +465,14 @@ public class BookingServiceImpl implements BookingService {
                 throw new AppException(BookingFeatureErrorCode.DUPLICATE_SERVICE);
             }
         }
+    }
+
+    private String requireValidPhone(String value) {
+        String phone = PhoneNumberValidator.normalize(value);
+        if (!PhoneNumberValidator.isValid(phone)) {
+            throw new AppException(BookingFeatureErrorCode.INVALID_CUSTOMER_PHONE);
+        }
+        return phone;
     }
 
     private List<PricedItem> priceItems(List<BookingItemRequest> requests) {
@@ -667,7 +695,8 @@ public class BookingServiceImpl implements BookingService {
     private BookingSearchResponse toSearchResponse(Booking booking) {
         return BookingSearchResponse.builder().id(booking.getId()).bookingCode(booking.getBookingCode())
                 .status(booking.getStatus().name()).customerAccountId(booking.getCustomerAccountId())
-                .customerName(booking.getCustomerNameSnapshot()).staffAccountId(booking.getStaffAccountId())
+                .customerName(booking.getCustomerNameSnapshot()).customerPhone(booking.getCustomerPhoneSnapshot())
+                .staffAccountId(booking.getStaffAccountId())
                 .staffName(booking.getStaffAccountId() == null ? null
                         : bookingRepository.findAccountDisplayName(booking.getStaffAccountId()).orElse(null))
                 .serviceNames(booking.getItems().stream().map(BookingItem::getServiceNameSnapshot).toList())

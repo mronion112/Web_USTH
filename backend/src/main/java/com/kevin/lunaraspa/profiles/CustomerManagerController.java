@@ -7,6 +7,7 @@ import com.kevin.lunaraspa.authentication_account.repository.RoleRepository;
 import com.kevin.lunaraspa.core.exception.AppException;
 import com.kevin.lunaraspa.core.exception.SystemErrorCode;
 import com.kevin.lunaraspa.core.http.ResponseBuilder;
+import com.kevin.lunaraspa.core.validation.PhoneNumberValidator;
 import com.kevin.lunaraspa.profiles.entity.CustomerProfile;
 import com.kevin.lunaraspa.profiles.repository.CustomerProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -109,13 +110,18 @@ public class CustomerManagerController {
         String notes = request.get("internalNotes");
         String prefs = request.get("preferences");
 
-        if (name == null || name.isBlank() || phone == null || phone.isBlank()) {
+        String normalizedPhone = PhoneNumberValidator.normalize(phone);
+        if (name == null || name.isBlank() || normalizedPhone == null) {
             throw new AppException(SystemErrorCode.INVALID_REQUEST, "Name and phone are required");
         }
+        if (!PhoneNumberValidator.isValid(normalizedPhone)) {
+            throw new AppException(SystemErrorCode.INVALID_REQUEST, "Invalid phone number");
+        }
 
-        String actualEmail = (email != null && !email.isBlank()) ? email.trim() : (phone.trim() + "@client.lunara.vn");
+        String emailPhone = normalizedPhone.replace("+", "");
+        String actualEmail = (email != null && !email.isBlank()) ? email.trim() : (emailPhone + "@client.lunara.vn");
         if (accountRepository.findByEmail(actualEmail).isPresent()) {
-            actualEmail = phone.trim() + "." + System.currentTimeMillis() + "@client.lunara.vn";
+            actualEmail = emailPhone + "." + System.currentTimeMillis() + "@client.lunara.vn";
         }
 
         Role customerRole = roleRepository.findByCodeIgnoreCase("CUSTOMER")
@@ -131,7 +137,7 @@ public class CustomerManagerController {
 
         CustomerProfile profile = CustomerProfile.builder()
                 .account(account)
-                .phone(phone.trim())
+                .phone(normalizedPhone)
                 .internalNotes(notes != null ? notes.trim() : null)
                 .preferences(prefs != null ? prefs.trim() : null)
                 .build();

@@ -7,6 +7,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } fr
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { bookingsApi, servicesApi, staffDirectoryApi, ApiBookingSearch, ApiService, PublicStaff } from '@/lib/api';
 import { useRefresh } from '@/lib/use-refresh';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@/lib/phone';
 
 const spaToday = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -233,6 +234,10 @@ export const CalendarPage: React.FC = () => {
   const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formClient.trim() || !formPhone.trim() || !formServiceId) return;
+    if (!isValidPhoneNumber(formPhone)) {
+      alert('Số điện thoại không hợp lệ.');
+      return;
+    }
 
     try {
       const selectedService = services.find((s) => Number(s.id) === Number(formServiceId)) || services[0];
@@ -240,7 +245,7 @@ export const CalendarPage: React.FC = () => {
         staffAccountId: formStaffId ? Number(formStaffId) : undefined,
         bookingStart: `${formDate}T${formTime}:00`,
         customerName: formClient.trim(),
-        customerPhone: formPhone.trim(),
+        customerPhone: normalizePhoneNumber(formPhone),
         items: [
           {
             serviceId: Number(selectedService.id),

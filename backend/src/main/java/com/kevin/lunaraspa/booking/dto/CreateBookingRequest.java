@@ -15,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateBookingRequest {
+    private String customerPhone;
     private Long staffAccountId;
     private LocalDateTime bookingStart;
     private String customerNote;

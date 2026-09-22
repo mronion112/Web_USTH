@@ -99,7 +99,8 @@ class NotificationControllerTest {
         List<?> eventTypes = (List<?>) paramsCaptor.getValue().get("eventTypes");
         assertTrue(eventTypes.contains("CREATED"));
         assertTrue(eventTypes.contains("CHECKED_IN"));
-        assertFalse(eventTypes.contains("PAYMENT_RECEIVED"));
+        assertTrue(eventTypes.contains("PAYMENT_INITIALIZED"));
+        assertTrue(eventTypes.contains("PAYMENT_RECEIVED"));
     }
 
     @Test

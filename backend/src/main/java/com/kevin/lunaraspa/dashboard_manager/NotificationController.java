@@ -22,7 +22,8 @@ public class NotificationController {
     private final AccountRepository accountRepository;
 
     private static final List<String> RECEPTIONIST_EVENTS = List.of(
-            "CREATED", "CHECKED_IN", "SERVICE_STARTED", "COMPLETED", "RESCHEDULED", "STAFF_ASSIGNED", "CANCELLED"
+            "CREATED", "CHECKED_IN", "SERVICE_STARTED", "COMPLETED", "RESCHEDULED", "STAFF_ASSIGNED", "CANCELLED",
+            "PAYMENT_INITIALIZED", "PAYMENT_RECEIVED"
     );
 
     private static final List<String> ACCOUNTANT_EVENTS = List.of(

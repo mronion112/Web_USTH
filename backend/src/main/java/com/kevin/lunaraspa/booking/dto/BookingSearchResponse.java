@@ -12,6 +12,7 @@ public class BookingSearchResponse {
     private final String status;
     private final Long customerAccountId;
     private final String customerName;
+    private final String customerPhone;
     private final Long staffAccountId;
     private final String staffName;
     private final List<String> serviceNames;

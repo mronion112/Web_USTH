@@ -232,6 +232,7 @@ export interface ApiBooking {
 }
 
 export interface CreateBookingRequest {
+  customerPhone: string;
   staffAccountId?: number;
   bookingStart: string;
   customerNote?: string;
@@ -331,6 +332,7 @@ export interface ApiBookingSearch {
   status: string;
   customerAccountId: number;
   customerName: string;
+  customerPhone?: string;
   staffAccountId?: number;
   staffName?: string;
   serviceNames?: string[];

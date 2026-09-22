@@ -19,6 +19,7 @@ import { Search, Plus, CheckCircle2, ChevronRight, X, UserCheck, CalendarClock, 
 import { useSearchParams } from 'react-router-dom';
 import { useRefresh } from '@/lib/use-refresh';
 import { latestBookingsQuery } from '@/lib/admin-booking-query';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@/lib/phone';
 
 const STATUS_LABELS: Record<string, string> = {
   ALL: 'Tất cả trạng thái',
@@ -101,6 +102,10 @@ export const BookingsPage: React.FC = () => {
     if (!formCustomerName.trim() || !formCustomerPhone.trim()) {
       return;
     }
+    if (!isValidPhoneNumber(formCustomerPhone)) {
+      alert('Số điện thoại không hợp lệ.');
+      return;
+    }
 
     try {
       const selectedService = services.find((s) => Number(s.id) === Number(formServiceId)) || services[0];
@@ -110,7 +115,7 @@ export const BookingsPage: React.FC = () => {
         staffAccountId: formStaffId === 'AUTO' ? undefined : Number(formStaffId),
         bookingStart: startIso,
         customerName: formCustomerName.trim(),
-        customerPhone: formCustomerPhone.trim(),
+        customerPhone: normalizePhoneNumber(formCustomerPhone),
         customerEmail: formCustomerEmail.trim() || undefined,
         customerNote: formNote.trim() || undefined,
         items: [
@@ -332,7 +337,10 @@ export const BookingsPage: React.FC = () => {
                 filtered.map((b) => (
                   <tr key={b.id} className="hover:bg-[#FAFBF9] transition-colors">
                     <td className="py-4 px-6 font-semibold text-[#14271C]">{b.bookingCode}</td>
-                    <td className="py-4 px-6 font-medium text-[#14271C]">{b.customerName}</td>
+                    <td className="py-4 px-6 font-medium text-[#14271C]">
+                      <div>{b.customerName}</div>
+                      <div className="mt-0.5 text-[11px] font-normal text-[#6B726C]">{b.customerPhone || 'Chưa có SĐT'}</div>
+                    </td>
                     <td className="py-4 px-6 text-[#526056]">
                       {b.staffName ? (
                         <span className="inline-flex items-center gap-1">
@@ -404,6 +412,7 @@ export const BookingsPage: React.FC = () => {
                   Vé hẹn #{selectedBooking.bookingCode}
                 </SheetTitle>
                 <p className="text-xs text-[#6B726C] mt-0.5">Khách hàng: {selectedBooking.customerName}</p>
+                <p className="text-xs text-[#6B726C]">SĐT: {selectedBooking.customerPhone || selectedBookingDetail?.customerPhoneSnapshot || 'Chưa có SĐT'}</p>
               </div>
               <SheetClose asChild>
                 <button type="button" className="p-1 text-[#8EAA97] hover:text-[#14271C]">
