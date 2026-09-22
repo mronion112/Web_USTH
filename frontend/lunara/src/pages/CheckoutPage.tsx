@@ -2,43 +2,52 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Clock, ShieldCheck, Copy, Check, ArrowRight } from 'lucide-react';
-import { api, ApiBooking, events } from '@/lib/api';
+import { QRCodeSVG } from 'qrcode.react';
+import { bookingsApi, ApiBooking, ApiError, ApiPayment, paymentsApi } from '@/lib/api';
+import { useRefresh } from '@/lib/use-refresh';
 
 export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const code = params.get('booking');
   const [booking, setBooking] = useState<ApiBooking | null>(null);
+  const [payment, setPayment] = useState<ApiPayment | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [clockOffset, setClockOffset] = useState(0);
   const [now, setNow] = useState(Date.now());
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (signal?: AbortSignal) => {
     if (!code) { setError('Thiếu mã đặt lịch.'); return; }
     try {
-      const result = await api<ApiBooking>(`/api/v1/bookings/${encodeURIComponent(code)}`);
+      const result = await bookingsApi.getByCode(code, signal);
       setBooking(result);
-      setClockOffset(new Date(result.serverNow).getTime() - Date.now());
+      const currentPayment = await paymentsApi.getByBooking(result.id, signal)
+        .catch((paymentError) => {
+          if (paymentError instanceof ApiError && paymentError.status === 404) {
+            return paymentsApi.create({ bookingId: result.id, method: 'QR' });
+          }
+          throw paymentError;
+        });
+      setPayment(currentPayment);
       setError('');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Không thể tải lịch hẹn.'); }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      setError(e instanceof Error ? e.message : 'Không thể tải lịch hẹn.');
+    }
   }, [code]);
 
+  useRefresh('payment', reload, Boolean(code));
   useEffect(() => {
-    void reload();
-    const tick = window.setInterval(() => setNow(Date.now()), 1000);
-    const poll = window.setInterval(() => void reload(), 5000);
-    const source = events();
-    source.addEventListener('booking.events', () => void reload());
-    return () => { window.clearInterval(tick); window.clearInterval(poll); source.close(); };
-  }, [reload]);
+    const tick = window.setTimeout(() => setNow(Date.now()), 1000);
+    return () => window.clearTimeout(tick);
+  }, [now]);
 
   const remaining = booking?.holdExpiresAt && booking.status === 'PENDING_PAYMENT'
-    ? Math.max(0, Math.ceil((new Date(booking.holdExpiresAt).getTime() - now - clockOffset) / 1000)) : 0;
+    ? Math.max(0, Math.ceil((new Date(booking.holdExpiresAt).getTime() - now) / 1000)) : 0;
   const formatCountdown = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   const copyBankInfo = async () => {
-    if (!booking) return;
-    await navigator.clipboard.writeText(`${booking.bank} | ${booking.bankAccount} | ${booking.totalAmount} VND | ${booking.paymentMemo}`);
+    if (!payment) return;
+    await navigator.clipboard.writeText(payment.transactionCode);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
@@ -60,24 +69,32 @@ export const CheckoutPage: React.FC = () => {
           <div className="space-y-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-[#8EAA97]">Dịch vụ đã chọn</span>
             {booking.items.map((item) => <div key={item.serviceId} className="flex items-center justify-between rounded-xl bg-[#F8F9F5] p-3.5 border border-[#E2E8E3]/60 text-xs">
-              <div><h4 className="font-semibold text-[#14271C]">{item.serviceNameSnapshot}</h4><span>{item.durationMinutes} phút</span></div>
-              <span className="font-bold text-[#14271C]">{item.lineAmount.toLocaleString('vi-VN')} đ</span>
+              <div><h4 className="font-semibold text-[#14271C]">{item.serviceName || item.serviceNameSnapshot || 'Dịch vụ spa'}</h4><span>{item.durationMinutes} phút</span></div>
+              <span className="font-bold text-[#14271C]">{Number(item.lineAmount).toLocaleString('vi-VN')} đ</span>
             </div>)}
           </div>
           <div className="pt-2 border-t border-[#E2E8E3] flex justify-between items-baseline">
             <span className="font-semibold text-sm text-[#526056]">Tổng thanh toán</span>
-            <span className="font-display text-2xl font-bold text-[#14271C]">{booking.totalAmount.toLocaleString('vi-VN')} đ</span>
+            <span className="font-display text-2xl font-bold text-[#14271C]">{Number(booking.totalAmount).toLocaleString('vi-VN')} đ</span>
           </div>
-          {booking.status === 'PENDING_PAYMENT' && remaining > 0 ? <>
+          {payment?.status === 'UNPAID' && booking.status === 'PENDING_PAYMENT' ? <>
             <div className="relative mx-auto flex flex-col items-center rounded-2xl bg-[#F8F9F5] p-6 border border-[#E2E8E3]">
-              <img src={booking.qrImageUrl} alt={`VietQR chuyển khoản ${booking.totalAmount} đồng, nội dung ${booking.paymentMemo}`} className="w-52 h-52 rounded-xl bg-white p-2" />
-              <div className="mt-4 flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 border border-[#D9E5DC] text-xs font-semibold text-[#1E3B2B]"><Clock className="h-3.5 w-3.5" />Còn {formatCountdown(remaining)}</div>
+              {payment.qrPayload && <QRCodeSVG value={payment.qrPayload} size={208} level="M" aria-label="Mã VietQR thanh toán Lunara" className="rounded-xl bg-white p-2" />}
+              {remaining > 0 ? (
+                <div className="mt-4 flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 border border-[#D9E5DC] text-xs font-semibold text-[#1E3B2B]"><Clock className="h-3.5 w-3.5" />Thời gian ưu tiên còn {formatCountdown(remaining)}</div>
+              ) : (
+                <div className="mt-4 rounded-xl bg-[#FFF8E7] px-3.5 py-2 text-center text-xs text-[#8A5A00]">Thời gian ưu tiên đã qua, nhưng lịch vẫn được giữ cho tới khi Lunara xác nhận giao dịch.</div>
+              )}
             </div>
-            <p className="text-xs text-center text-[#526056]">Chuyển khoản đúng số tiền và nội dung <strong>{booking.paymentMemo}</strong>. Xác nhận sẽ cập nhật tự động sau khi ngân hàng ghi nhận.</p>
+            <div className="text-xs text-center text-[#526056] space-y-1">
+              <p>Quét VietQR để chuyển đúng <strong>{Number(payment.amount).toLocaleString('vi-VN')} đ</strong>.</p>
+              <p>{payment.bankAccountName} · {payment.bankAccount}</p>
+              <p>Nội dung bắt buộc: <strong>{payment.transactionCode}</strong>. SePay sẽ tự động đối soát sau khi ngân hàng ghi nhận.</p>
+            </div>
             <button type="button" onClick={() => void copyBankInfo()} className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#D9E5DC] bg-white py-2.5 text-xs font-medium text-[#526056] hover:bg-[#F8F9F5]">
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Đã sao chép' : `Sao chép ${booking.bank} · ${booking.bankAccount} · nội dung`}
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Đã sao chép' : 'Sao chép nội dung chuyển khoản'}
             </button>
-          </> : <p className="text-center text-sm text-[#526056]">{booking.status === 'CONFIRMED' ? 'Thanh toán đã được xác nhận. Vé lịch hẹn đã sẵn sàng.' : booking.status === 'EXPIRED' || (booking.status === 'PENDING_PAYMENT' && remaining === 0) ? 'Thời gian giữ chỗ đã hết. Nếu đã chuyển khoản, vui lòng liên hệ spa để đối soát.' : `Trạng thái: ${booking.status}`}</p>}
+          </> : <p className="text-center text-sm text-[#526056]">{payment?.status === 'PAID' || booking.status === 'CONFIRMED' ? 'Thanh toán đã được xác nhận. Vé lịch hẹn đã sẵn sàng.' : `Trạng thái thanh toán: ${payment?.status || 'đang khởi tạo'}`}</p>}
           <Button disabled={booking.status !== 'CONFIRMED'} onClick={() => navigate(`/ticket/${booking.bookingCode}`)} className="w-full rounded-xl h-13 bg-[#1E3B2B] text-white hover:bg-[#14271C] font-semibold text-sm shadow-luxury">
             Xem vé lịch hẹn <ArrowRight className="h-4 w-4 ml-1.5" />
           </Button>

@@ -1,0 +1,19 @@
+id,code,module,description
+1,BOOKINGS_VIEW,BOOKINGS,Xem booking
+2,BOOKINGS_CREATE,BOOKINGS,Tạo booking
+3,BOOKINGS_EDIT,BOOKINGS,Cập nhật booking
+4,BOOKINGS_ASSIGN,BOOKINGS,Phân công Staff cho booking
+5,BOOKINGS_CHECKIN,BOOKINGS,Check-in khách hàng
+6,BOOKINGS_SERVICE_UPDATE,BOOKINGS,Cập nhật trạng thái thực hiện dịch vụ
+7,CUSTOMERS_VIEW,CUSTOMERS,Xem thông tin khách hàng
+8,CUSTOMERS_EDIT,CUSTOMERS,Cập nhật thông tin khách hàng
+9,PAYMENTS_VIEW,PAYMENTS,Xem giao dịch thanh toán
+10,PAYMENTS_PROCESS,PAYMENTS,Xử lý thanh toán
+11,PAYMENTS_REFUND,PAYMENTS,Hoàn tiền
+12,REPORTS_VIEW,REPORTS,Xem báo cáo
+13,FEEDBACK_VIEW,REPORTS,Xem đánh giá khách hàng
+14,ADMIN_ACCOUNTS_VIEW,ADMINISTRATION,Xem danh sách tài khoản
+15,ADMIN_ACCOUNTS_MANAGE,ADMINISTRATION,Quản lý tài khoản
+16,ADMIN_ROLES,ADMINISTRATION,Quản lý role và permission
+17,ADMIN_SERVICES,ADMINISTRATION,Quản lý dịch vụ
+18,ADMIN_STAFF_SCHEDULE,ADMINISTRATION,Quản lý lịch Staff

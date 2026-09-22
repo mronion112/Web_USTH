@@ -4,6 +4,7 @@
 
 ```text
 payments
+sepay_transactions
 bookings
 booking_events
 ```
@@ -13,6 +14,7 @@ booking_events
 ```text
 payments.booking_id -> bookings.id
 booking_events.booking_id -> bookings.id
+sepay_transactions.matched_payment_id -> payments.id
 ```
 
 Quan hệ `bookings` và `payments` là 1-1 vì `payments.booking_id` là UNIQUE.
@@ -137,11 +139,36 @@ PATCH
 }
 ```
 
-**Quy tắc chính:** Sau khi thanh toán thành công có thể cập nhật Booking từ `PENDING_PAYMENT` sang `PENDING` và ghi `booking_events` với `PAYMENT_RECEIVED`.
+**Quy tắc chính:** Xác nhận thủ công và webhook SePay cùng đi qua một luồng xác nhận. Sau khi thanh toán thành công, Booking chuyển từ `PENDING_PAYMENT` sang `CONFIRMED` và ghi `booking_events` với `PAYMENT_RECEIVED`.
 
 ---
 
-## 4. Refund Payment
+## 4. Webhook SePay
+
+**Endpoint public (xác thực bằng chữ ký HMAC, không dùng JWT)**
+
+```text
+POST /api/payments/sepay/webhook
+```
+
+Server kiểm tra `X-SePay-Timestamp`, `X-SePay-Signature`, tài khoản nhận, chiều tiền vào, mã giao dịch và đúng số tiền. Mỗi `sepay_id` chỉ được xử lý một lần. Giao dịch không thể khớp tự động được lưu ở trạng thái `MANUAL_REVIEW` để OWNER, MANAGER hoặc ACCOUNTANT xử lý.
+
+Response nhận webhook thành công luôn là:
+
+```json
+{"success": true}
+```
+
+Các endpoint đối soát:
+
+```text
+GET  /api/payments/sepay/transactions?status=MANUAL_REVIEW
+POST /api/payments/sepay/transactions/{sepayId}/reconcile
+```
+
+---
+
+## 5. Refund Payment
 
 **Endpoint**
 

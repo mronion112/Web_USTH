@@ -1,0 +1,13 @@
+id,name,category,description,image_url,base_price,minimum_duration_minutes,is_duration_adjustable,duration_step_minutes,price_per_duration_step,preparation_buffer_minutes,cleanup_buffer_minutes,display_order,is_active,created_at,updated_at
+1,Chăm sóc da mặt cơ bản,FACIAL,"Làm sạch, cân bằng và cấp ẩm cho da.",\N,350000,60,1,30,120000,10,10,1,1,2026-01-16 15:00:00,2026-05-03 15:00:00
+2,Làm sạch sâu da mặt,FACIAL,Loại bỏ bã nhờn và bụi bẩn trong lỗ chân lông.,\N,480000,75,0,\N,\N,10,15,2,1,2026-02-03 13:00:00,2026-05-16 13:00:00
+3,Cấp ẩm chuyên sâu da mặt,FACIAL,Liệu trình cấp ẩm chuyên sâu cho da khô.,\N,520000,60,1,30,150000,10,10,3,1,2026-02-21 10:00:00,2026-07-13 06:30:00
+4,Massage thư giãn toàn thân,MASSAGE,Massage toàn thân giúp giảm căng cơ và thư giãn.,\N,450000,60,1,30,180000,5,10,4,1,2026-02-12 08:00:00,2026-05-27 08:00:00
+5,Massage tinh dầu,MASSAGE,"Massage với tinh dầu thiên nhiên, giảm mệt mỏi.",\N,520000,60,1,30,200000,5,10,5,1,2026-01-22 07:00:00,2026-05-16 07:00:00
+6,Massage đá nóng,MASSAGE,Dùng đá bazan nóng làm ấm và giảm đau cơ.,\N,650000,90,0,\N,\N,10,15,6,1,2026-01-23 07:00:00,2026-03-15 07:00:00
+7,"Trị liệu đầu, cổ và vai gáy",MASSAGE,"Tập trung vùng cổ vai gáy, giảm đau đầu do căng thẳng.",\N,280000,45,0,\N,\N,5,5,7,1,2026-02-12 13:00:00,2026-07-20 08:30:00
+8,Tẩy tế bào chết toàn thân,BODY,Tẩy da chết và làm mịn da toàn thân.,\N,420000,60,0,\N,\N,10,15,8,1,2026-02-10 07:00:00,2026-05-22 07:00:00
+9,Ủ dưỡng và chăm sóc cơ thể,BODY,Ủ dưỡng giúp da mềm mại và đều màu.,\N,580000,75,0,\N,\N,10,15,9,1,2026-01-29 09:00:00,2026-05-10 09:00:00
+10,Chăm sóc và massage bàn chân,BODY,Ngâm chân thảo dược và massage bàn chân.,\N,250000,45,1,15,80000,5,5,10,1,2026-02-01 07:00:00,2026-04-13 07:00:00
+11,Phục hồi da cao cấp,FACIAL,Liệu trình phục hồi chuyên sâu cho da tổn thương.,\N,850000,90,0,\N,\N,15,15,11,1,2025-12-31 13:00:00,2026-04-25 13:00:00
+12,Gói chăm sóc cơ thể cổ điển,BODY,"Gói chăm sóc cổ điển, hiện ngừng nhận booking mới.",\N,390000,60,0,\N,\N,10,10,12,0,2026-01-27 15:00:00,2026-03-11 15:00:00

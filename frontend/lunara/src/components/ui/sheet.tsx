@@ -59,19 +59,31 @@ export const SheetDescription = ({
 
 export const SheetClose = ({
   onClick,
-  className
+  className,
+  children,
 }: {
-  onClick: () => void;
+  onClick?: () => void;
   className?: string;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={cn(
-      "absolute right-4 top-4 rounded-full p-2 text-[#6B726C] hover:bg-[#F8F9F5] hover:text-[#14271C] transition-colors cursor-pointer",
-      className
-    )}
-  >
-    <X className="h-5 w-5" />
-  </button>
-)
+  asChild?: boolean;
+  children?: React.ReactNode;
+}) => {
+  if (children) {
+    return (
+      <div onClick={onClick} className={className}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "absolute right-4 top-4 rounded-full p-2 text-[#6B726C] hover:bg-[#F8F9F5] hover:text-[#14271C] transition-colors cursor-pointer",
+        className
+      )}
+    >
+      <X className="h-5 w-5" />
+    </button>
+  );
+};

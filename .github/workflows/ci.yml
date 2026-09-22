@@ -65,50 +65,8 @@ jobs:
 
   build-test:
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: test-root
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
     steps:
       - uses: actions/checkout@v5
-
-      - name: Chờ MySQL sẵn sàng
-        if: hashFiles('backend/pom.xml') != ''
-        env:
-          MYSQL_PWD: test-root
-        run: |
-          for i in $(seq 1 30); do
-            if mysqladmin ping -h127.0.0.1 --silent; then
-              echo "MySQL đã sẵn sàng."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "MySQL không sẵn sàng sau 60 giây." >&2
-          exit 1
-
-      - name: Nạp schema cho test
-        if: hashFiles('backend/pom.xml') != ''
-        env:
-          MYSQL_PWD: test-root
-        run: mysql -h127.0.0.1 -uroot < database/Web_DataBase_USTH.sql
 
       - name: Cài Java
         if: hashFiles('backend/pom.xml') != ''
@@ -118,22 +76,11 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # Test backend tự dùng H2 qua backend/src/test/resources/application.yml,
+      # không cần MySQL/Redis. Không truyền SPRING_DATASOURCE_* vì biến môi trường
+      # sẽ đè URL H2 trong khi driver-class-name vẫn là H2, làm hỏng context.
       - name: Test backend
         if: hashFiles('backend/pom.xml') != ''
-        env:
-          BACKEND_PORT: 8080
-          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-          SPRING_DATASOURCE_USERNAME: root
-          SPRING_DATASOURCE_PASSWORD: test-root
-          REDIS_HOST: 127.0.0.1
-          REDIS_PORT: 6379
-          JWT_SECRET: test-secret-0123456789abcdef-0123456789abcdef
-          JWT_EXPIRATION_MS: 86400000
-          GOOGLE_CLIENT_ID: test-client-id
-          GOOGLE_CLIENT_SECRET: test-client-secret
-          FRONTEND_URL: http://localhost:5173
-          GEMINI_API_KEY: test-gemini-key
-          CHROMA_URL: http://127.0.0.1:8000
         run: mvn -B -f backend/pom.xml test
 
       - name: Cài Node
@@ -243,3 +190,48 @@ jobs:
           fi
           git diff --name-status "origin/$BASE"...HEAD -- $PATHS
           echo "Xong. Sửa file hạ tầng cần reviewer xác nhận."
+
+  dev-login-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chặn patch dev-login lọt vào main
+        run: |
+          PATHS="backend/src frontend/lunara/src templates/docker-compose.yml templates/Dockerfile.frontend templates/.env.example"
+          PATTERN="DEV_LOGIN_PATCH_MARKER|DevAuthController|DevLoginPage|/dev/auth/login|APP_DEV_LOGIN_ENABLED|VITE_DEV_LOGIN"
+          HITS=$(git grep -lE "$PATTERN" -- $PATHS || true)
+          if [ -n "$HITS" ]; then
+            echo "$HITS"
+            echo "Phát hiện dấu vết patch dev-login. Gỡ trước khi push: git apply -R templates/dev-login/dev-login.patch" >&2
+            exit 1
+          fi
+          echo "Không có dấu vết dev-login."
+
+  dev-login-patch-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Chặn patch dev-login lệch main
+        run: |
+          PATCH=templates/dev-login/dev-login.patch
+          if git grep -qE "DEV_LOGIN_PATCH_MARKER" -- backend/src frontend/lunara/src; then
+            echo "Patch đang áp trong commit; dev-login-guard sẽ chặn, bỏ qua kiểm tra apply."
+            exit 0
+          fi
+          ALLOWED="backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java backend/src/main/resources/application.yml frontend/lunara/src/App.tsx frontend/lunara/src/lib/api.ts frontend/lunara/src/pages/DevLoginPage.tsx frontend/lunara/src/pages/admin/AdminLoginPage.tsx templates/.env.example templates/Dockerfile.frontend templates/docker-compose.yml"
+          BAD=""
+          for p in $(git apply --numstat "$PATCH" | awk '{print $3}'); do
+            case " $ALLOWED " in *" $p "*) ;; *) BAD="$BAD $p";; esac
+          done
+          if [ -n "$BAD" ]; then
+            echo "Patch đụng file ngoài danh sách cho phép:$BAD" >&2
+            exit 1
+          fi
+          if git apply --check "$PATCH"; then
+            echo "Patch áp được."
+          else
+            echo "Patch dev-login đã lệch so với main, cần tái tạo (xem templates/dev-login/README.md)." >&2
+            exit 1
+          fi

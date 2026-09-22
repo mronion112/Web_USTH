@@ -2,51 +2,88 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Star, Clock, Calendar, Sparkles, Home } from 'lucide-react';
 import { SuccessCheck } from '@/components/transitions/SuccessCheck';
-import { api, ApiBooking, events, json } from '@/lib/api';
+import { bookingsApi, api, ApiBooking, ApiPayment, paymentsApi, PublicStaff, json, staffDirectoryApi } from '@/lib/api';
+import { useRefresh } from '@/lib/use-refresh';
 
 export const TicketPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [booking, setBooking] = useState<ApiBooking | null>(null);
+  const [payment, setPayment] = useState<ApiPayment | null>(null);
+  const [staff, setStaff] = useState<PublicStaff[]>([]);
   const [error, setError] = useState('');
   const isCompleted = booking?.status === 'COMPLETED';
-  const reload = useCallback(() => {
+
+  const reload = useCallback((signal?: AbortSignal) => {
     if (!id) return;
-    api<ApiBooking>(`/api/v1/bookings/${encodeURIComponent(id)}`).then(setBooking).catch((e) => setError(e.message));
+    return bookingsApi.getByCode(id, signal).then(async (value) => {
+      setBooking(value);
+      setPayment(await paymentsApi.getByBooking(value.id, signal).catch(() => null));
+      setError('');
+    }).catch((e) => {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e.message);
+    });
   }, [id]);
-  useEffect(() => {
-    reload();
-    const poll = window.setInterval(reload, 10000);
-    const source = events();
-    source.addEventListener('booking.events', reload);
-    return () => { window.clearInterval(poll); source.close(); };
-  }, [reload]);
+
+  useRefresh('booking', async (signal) => reload(signal), Boolean(id));
+  useEffect(() => { staffDirectoryApi.getAll().then(setStaff).catch(() => undefined); }, []);
 
   // Rating & Feedback State (FRAME 06)
   const [rating, setRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [feedbackText, setFeedbackText] = useState<string>('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
-  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [rescheduleStart, setRescheduleStart] = useState('');
+  const [newStaffId, setNewStaffId] = useState('');
   const [requestSent, setRequestSent] = useState(false);
 
   const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!booking) return;
     try {
-      await api(`/api/v1/bookings/${encodeURIComponent(booking.bookingCode)}/feedback`, { method: 'POST', body: json({ rating, comment: feedbackText }) });
+      await api('/api/feedback', {
+        method: 'POST',
+        body: json({ bookingId: booking.id, rating, comment: feedbackText }),
+      });
       setFeedbackSubmitted(true);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Không gửi được đánh giá.'); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không gửi được đánh giá.');
+    }
   };
 
-  const formatDate = (value: string) => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' });
+  const formatDate = (value: string) => {
+    if (!value) return '—';
+    return new Date(value).toLocaleString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  };
+
   const requestReschedule = async () => {
-    if (!booking || !rescheduleReason.trim()) return;
+    if (!booking || !rescheduleStart) return;
     try {
-      await api(`/api/v1/bookings/${encodeURIComponent(booking.bookingCode)}/reschedule-requests`, { method: 'POST', body: json({ reason: rescheduleReason.trim() }) });
-      setRequestSent(true); setError('');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Không gửi được yêu cầu đổi lịch.'); }
+      const requested = rescheduleStart.length === 16 ? `${rescheduleStart}:00` : rescheduleStart;
+      const items = booking.items.map((item) => ({ serviceId: Number(item.serviceId), durationMinutes: item.durationMinutes }));
+      const end = new Date(requested);
+      end.setMinutes(end.getMinutes() + booking.totalDurationMinutes + 1);
+      const endLocal = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
+        + `T${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}:00`;
+      const availability = await bookingsApi.getAvailability({ from: requested, to: endLocal,
+        items, staffAccountId: newStaffId ? Number(newStaffId) : undefined });
+      const available = availability.slots.some((slot) => slot.bookingStart.slice(0, 16) === requested.slice(0, 16)
+        && (!newStaffId || Number(slot.staffAccountId) === Number(newStaffId)));
+      if (!available) throw new Error('Khung giờ hoặc kỹ thuật viên đã chọn không còn khả dụng.');
+      await bookingsApi.reschedule(booking.bookingCode, requested, newStaffId ? Number(newStaffId) : undefined);
+      await reload();
+      setRequestSent(true);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Không gửi được yêu cầu đổi lịch.');
+    }
   };
 
   return (
@@ -120,8 +157,8 @@ export const TicketPage: React.FC = () => {
 
             <div className="space-y-2">
               {booking.items.map((item) => <div key={item.serviceId} className="rounded-xl bg-[#F8F9F5] p-3.5 border border-[#E2E8E3]/60 flex items-center justify-between text-xs">
-                <div><h4 className="font-semibold text-[#14271C]">{item.serviceNameSnapshot}</h4><span className="text-[11px] text-[#6B726C]">Thời gian: {item.durationMinutes} phút</span></div>
-                <span className="font-bold text-[#14271C]">{item.lineAmount.toLocaleString('vi-VN')} đ</span>
+                <div><h4 className="font-semibold text-[#14271C]">{item.serviceName || item.serviceNameSnapshot || 'Dịch vụ spa'}</h4><span className="text-[11px] text-[#6B726C]">Thời gian: {item.durationMinutes} phút</span></div>
+                <span className="font-bold text-[#14271C]">{Number(item.lineAmount).toLocaleString('vi-VN')} đ</span>
               </div>)}
             </div>
           </div>
@@ -134,7 +171,7 @@ export const TicketPage: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span>Chuyên viên phụ trách:</span>
-              <span className="font-semibold text-[#14271C]">Mã chuyên viên #{booking.staffAccountId}</span>
+              <span className="font-semibold text-[#14271C]">{booking.staff?.displayName || (booking.staffAccountId ? `Chuyên viên #${booking.staffAccountId}` : 'Tự động phân công')}</span>
             </div>
             <div className="flex justify-between">
               <span>Trạng thái dịch vụ:</span>
@@ -143,14 +180,14 @@ export const TicketPage: React.FC = () => {
               </span>
             </div>
             <div className="pt-2 border-t border-[#E2E8E3] flex justify-between items-baseline">
-              <span className="font-bold text-sm text-[#14271C]">Tổng tiền đã thanh toán:</span>
-              <span className="font-display text-lg font-bold text-[#1E3B2B]">{booking.totalAmount.toLocaleString('vi-VN')} đ</span>
+              <span className="font-bold text-sm text-[#14271C]">{payment?.status === 'PAID' ? 'Đã thanh toán:' : 'Tổng giá trị:'}</span>
+              <span className="font-display text-lg font-bold text-[#1E3B2B]">{Number(booking.totalAmount).toLocaleString('vi-VN')} đ</span>
             </div>
           </div>
 
-          {booking.status === 'CONFIRMED' && new Date(booking.bookingStart).getTime() - new Date(booking.serverNow).getTime() >= 5 * 60 * 60 * 1000 && <div className="pt-4 border-t border-[#E2E8E3] space-y-2">
+          {booking.status === 'CONFIRMED' && <div className="pt-4 border-t border-[#E2E8E3] space-y-2">
             <h3 className="text-xs font-bold text-[#14271C]">Cần đổi lịch?</h3>
-            {requestSent ? <p className="text-xs text-[#2E7D32]">Spa đã nhận yêu cầu. Nhân viên sẽ liên hệ để xác nhận thời gian mới.</p> : <><Textarea value={rescheduleReason} onChange={(e) => setRescheduleReason(e.target.value)} placeholder="Lý do đổi lịch (nhân viên sẽ liên hệ trước khi đổi)" rows={2} /><Button variant="outline" disabled={!rescheduleReason.trim()} onClick={() => void requestReschedule()} className="text-xs">Gửi yêu cầu đổi lịch</Button></>}
+            {requestSent ? <p className="text-xs text-[#2E7D32]">Lịch hẹn đã được cập nhật thành công.</p> : <><Input type="datetime-local" value={rescheduleStart} onChange={(e) => setRescheduleStart(e.target.value)} /><Select value={newStaffId} onChange={(e) => setNewStaffId(e.target.value)}><option value="">Tự động / giữ kỹ thuật viên hiện tại</option>{staff.map((person) => <option key={person.accountId} value={String(person.accountId)}>{person.displayName}</option>)}</Select><Button variant="outline" disabled={!rescheduleStart} onClick={() => void requestReschedule()} className="text-xs">Cập nhật lịch hẹn</Button></>}
           </div>}
 
           {/* FRAME 06: Service Rating & Feedback Section (Only if completed) */}

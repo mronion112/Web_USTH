@@ -1,0 +1,1369 @@
+về mặt thiết kế gần như ok. Tôi đang muốn build chatbot dựa vào nội nại có sẵn là đang dùng chính Google Auth lên muốn làm chatbot customer service & manager service ngay trong google chat. Liệu có khả thi ?
+
+Khả thi, và với kiến trúc Lunara hiện tại thì còn khá hợp lý vì web của bạn đã dùng Google Auth. Google Chat hỗ trợ interactive Chat app qua HTTP endpoint, nhận message/button/dialog events, hiển thị card/dialog và gọi ngược sang web service của bạn. Google cũng hỗ trợ kết nối Chat app với service bên ngoài và khuyến nghị Google Sign-In cho account linking.
+
+Mình sẽ làm một Lunara Assistant duy nhất, không tách thành hai bot Customer/Manager. Bot xác định người đang chat → lookup account Lunara → đọc role → cung cấp capability tương ứng.
+
+                         GOOGLE CHAT
+
+                    ┌────────────────────┐
+                    │  Lunara Assistant  │
+                    └─────────┬──────────┘
+                              │
+                         User message
+                              │
+                              ▼
+                 Google Chat Interaction Event
+                              │
+                              ▼
+             POST /integrations/google-chat/events
+                              │
+                              ▼
+                    Identity Resolver
+                              │
+                    Google identity
+                              │
+                              ▼
+                         Lunara User
+                              │
+                   ┌──────────┴──────────┐
+                   │                     │
+                CUSTOMER             SPA STAFF
+                   │                     │
+                   ▼                     ▼
+          Customer Assistant       Role / Permission
+                                         │
+                              ┌──────────┼───────────┐
+                              │          │           │
+                           Lễ tân     Quản lý     Chủ Spa
+                              │          │           │
+                              └──────────┴───────────┘
+                                         │
+                                         ▼
+                                Manager Assistant
+
+Google Chat interaction event có thông tin user tương tác với app; Google cung cấp identifier cho user, và Chat app có thể xác định người gửi từ Event.user.name.
+
+Customer Service
+
+Customer có thể DM trực tiếp:
+
+User:
+"Lịch của tôi"
+
+Lunara:
+┌──────────────────────────────────────┐
+│ LỊCH HẸN SẮP TỚI                    │
+│                                      │
+│ Massage thư giãn                     │
+│ 16/09/2026 · 14:00 - 15:00           │
+│ Nhân viên: Linh                      │
+│                                      │
+│ #ABC123456                           │
+│                                      │
+│ [ Xem vé ]                           │
+└──────────────────────────────────────┘
+
+Hoặc:
+
+User:
+"ABC123456"
+
+Bot:
+┌──────────────────────────────────────┐
+│ Vé #ABC123456                        │
+│                                      │
+│ Massage thư giãn       60 phút       │
+│ Trị liệu              60 phút       │
+│                                      │
+│ 16/09/2026                           │
+│ 13:00 - 15:00                        │
+│                                      │
+│ Tổng                  900K           │
+│ Trạng thái             CONFIRMED     │
+│                                      │
+│ [ Xem vé ]        [ Huỷ lịch ]       │
+└──────────────────────────────────────┘
+
+Natural language có thể đơn giản như:
+
+"Lịch spa của tôi?"
+"Tôi đặt ngày nào?"
+"Xem vé ABC123456"
+"Dịch vụ massage giá bao nhiêu?"
+"Tôi muốn huỷ lịch"
+
+Google Chat hỗ trợ cả free-text query, commands, cards và dialogs, nên không nhất thiết biến bot thành một CLI /booking, /ticket cứng nhắc.
+
+Manager Service
+
+Phần này mới thực sự hay vì nó trở thành một management copilot cho hệ thống.
+
+Quản lý:
+"Hôm nay có bao nhiêu lịch?"
+
+Lunara:
+┌──────────────────────────────────────┐
+│ HÔM NAY · 15/09                     │
+│                                      │
+│ Tổng booking              24         │
+│ Đã hoàn thành              8         │
+│ Đang phục vụ               3         │
+│ Sắp tới                   11         │
+│ Đã huỷ                     2         │
+│                                      │
+│ [ Xem danh sách ]                    │
+└──────────────────────────────────────┘
+
+Hoặc:
+
+"15h ai đang rảnh?"
+
+→ Linh       Bận
+→ Mai        Rảnh
+→ Hoa        Rảnh
+"Booking ABC123 là của ai?"
+
+→ Nguyễn Văn A
+→ Massage thư giãn
+→ 14:00 - 15:00
+→ Staff: Linh
+→ CONFIRMED
+"Doanh thu hôm nay?"
+
+┌──────────────────────────────┐
+│ Doanh thu hôm nay            │
+│                              │
+│ 8,400,000đ                   │
+│                              │
+│ 18 giao dịch                 │
+└──────────────────────────────┘
+
+Và quyền phải follow đúng RBAC:
+
+LỄ TÂN
+├── booking
+├── calendar
+├── customers
+└── payment operation
+
+
+KỸ THUẬT VIÊN
+├── công việc của tôi
+├── lịch của tôi
+└── service
+
+
+QUẢN LÝ
+├── booking
+├── calendar
+├── staff
+├── service
+├── payment
+└── report
+
+
+CHỦ SPA
+└── tất cả
+
+Ví dụ kỹ thuật viên hỏi:
+
+"Lịch của tôi hôm nay"
+
+09:00 - 10:00
+Massage thư giãn
+Nguyễn Văn A
+
+11:00 - 12:00
+Trị liệu
+Trần Thị B
+
+14:30 - 15:30
+Massage thư giãn
+Lê Văn C
+
+Nhưng hỏi:
+
+"Doanh thu tháng này?"
+
+thì permission không có → bot không query dữ liệu đó.
+
+Authentication nên tận dụng Google Auth như thế nào
+
+Mình sẽ không dùng email làm identity chính, dù có thể dùng để đối chiếu ban đầu.
+
+Hiện web:
+
+Google OAuth
+     ↓
+Google account
+     ↓
+User
+
+Nên DB giữ liên kết:
+
+users
+
+id
+google_subject_id
+email
+name
+role_id
+...
+
+google_subject_id chính là Google sub, ổn định hơn email.
+
+Chat app:
+
+Google Chat User
+      ↓
+Account Linking / Google Sign-In
+      ↓
+Google sub
+      ↓
+users.google_subject_id
+      ↓
+Lunara user_id
+      ↓
+Role + Permissions
+
+Google chính thức khuyến nghị dùng sub trong Google identity token để xác định account khi Chat app kết nối tới external service.
+
+Vì vậy sau khi link lần đầu:
+
+Google Chat account
+       =
+Google Auth account trên Lunara
+       =
+Lunara User
+
+Sau đó user không phải nhập lại email/password trong Chat.
+
+Kiến trúc backend mình sẽ dùng
+
+Vì bạn đang hướng production-level, đừng để Google Chat gọi thẳng LLM rồi để LLM query database.
+
+Google Chat
+    │
+    ▼
+GoogleChatController
+    │
+    ▼
+Identity / RBAC
+    │
+    ▼
+Chat Orchestrator
+    │
+    ├────────────── LLM
+    │                │
+    │         understand intent
+    │
+    ▼
+Tool / Action Layer
+    │
+    ├── getMyBookings()
+    ├── getBooking()
+    ├── getTodayBookings()
+    ├── getStaffAvailability()
+    ├── getMyWork()
+    ├── getRevenue()
+    └── cancelBooking()
+             │
+             ▼
+       EXISTING SERVICES
+             │
+     ┌───────┼─────────┐
+     ▼       ▼         ▼
+ Booking   Staff     Payment
+ Service   Service   Service
+     │
+     └────────┬────────┘
+              ▼
+             DB
+
+Tức là LLM chỉ quyết định:
+
+User asks:
+"Hôm nay Linh còn lịch trống lúc nào?"
+
+          ↓ LLM
+
+intent = CHECK_STAFF_AVAILABILITY
+staff = Linh
+date = TODAY
+
+          ↓
+
+Booking/Calendar Service
+
+          ↓
+
+structured result
+
+          ↓ LLM
+
+"Linh còn trống lúc 10:30 và 16:00."
+
+LLM không được tự sinh SQL, tự bypass RBAC hay tự thay đổi booking.
+
+Một điểm mình sẽ tận dụng rất mạnh: Cards
+
+Không nên để tất cả output là plain text. Google Chat hỗ trợ interactive cards và dialogs.
+
+Ví dụ manager:
+
+"Hôm nay có lịch gì?"
+
+┌───────────────────────────────────────┐
+│ TODAY                                │
+│                                      │
+│ 14:00  Nguyễn A                      │
+│ Massage · Linh                       │
+│ CONFIRMED                            │
+│                         [ Chi tiết ] │
+├───────────────────────────────────────┤
+│ 14:30  Trần B                        │
+│ Facial · Mai                         │
+│ CHECKED IN                           │
+│                         [ Chi tiết ] │
+├───────────────────────────────────────┤
+│ 15:00  Lê C                          │
+│ Therapy · —                          │
+│ NEED STAFF                           │
+│                          [ Assign ]  │
+└───────────────────────────────────────┘
+
+Như vậy Google Chat gần như trở thành mini admin interface.
+
+Realtime cũng ghép được
+
+Kiến trúc realtime hiện tại của bạn:
+
+Customer booking
+      ↓
+Backend
+      ↓
+Event
+ ┌────┴─────────────┐
+ ↓                  ↓
+WebSocket       Google Chat
+ ↓                  ↓
+Dashboard       Manager Space
+
+Ví dụ booking mới:
+
+🔔 Booking mới
+
+#LNR-092
+Nguyễn Văn A
+Massage thư giãn
+16:30 - 17:30
+
+[ Xem booking ]
+
+Google Chat app có thể gửi asynchronous/proactive messages từ external system chứ không chỉ phản hồi khi người dùng nhắn.
+
+Đây rất hợp tiêu chí Realtime mà bạn đã đặt ra.
+
+Một limitation cần biết
+
+Demo nội bộ rất dễ. Public customer thì phức tạp hơn một chút.
+
+Trong lúc development, Chat app có thể giới hạn cho trusted testers trong Google Workspace organization. Nếu muốn customer bên ngoài tổ chức hoặc người dùng Google cá nhân tìm/install bot, bạn phải đi theo luồng publish qua Google Workspace Marketplace; Google có review cho public apps. Google xác nhận Chat apps có thể được Marketplace phân phối cho tất cả Google Chat users, kể cả người sử dụng Workspace apps cho mục đích cá nhân.
+
+Do đó với project này mình sẽ triển khai theo hai phase:
+
+PHASE 1 — Project / Demo
+
+Lunara Chat App
+      │
+      ├── Customer test accounts
+      ├── Receptionist
+      ├── Therapist
+      ├── Manager
+      └── Owner
+
+Google Workspace trusted testers
+
+sau đó nếu thật sự production:
+
+PHASE 2
+
+Google Workspace Marketplace
+          ↓
+Public Lunara Chat App
+          ↓
+Customer Google accounts
+
+Kết luận: rất khả thi và đáng làm. Thậm chí nó kết nối rất đẹp các phần bạn đã thiết kế: Google Auth + RBAC + Booking + Calendar + Realtime + Customer Service + Management. Mình sẽ chọn một Lunara Google Chat App, role-aware, thay vì xây hai chatbot riêng; customer, kỹ thuật viên, lễ tân và manager nói chuyện với cùng bot nhưng bot chỉ expose tool/data mà role đó được phép dùng.
+
+Có, và đây là cách mình nghĩ đáng làm nhất để đạt trải nghiệm cross-platform: không nhúng nguyên giao diện Google Chat vào website, mà dùng một Lunara Agent chung rồi expose nó qua 2 channel:
+
+                         LUNARA AGENT
+                     Python / FastAPI
+                           │
+                 ┌─────────┴─────────┐
+                 │                   │
+                 ▼                   ▼
+           Lunara Web            Google Chat
+           Chat Widget             Chat App
+                 │                   │
+                 └─────────┬─────────┘
+                           │
+                     Agent Graph
+                           │
+                  RBAC + Tool Calling
+                           │
+                           ▼
+                    Spring Backend
+
+Google Chat chính thức hỗ trợ Chat app nhận message, gửi text/card, interactive buttons, dialogs và có App Home riêng, nên nó hoàn toàn có thể là một channel đầy đủ cho agent của bạn.
+
+Không nên cố embed nguyên Google Chat
+
+Mình không thấy Google cung cấp một cơ chế chính thức để lấy Google Chat client UI rồi iframe/embed trực tiếp vào web app của bạn. Google Chat API tập trung vào việc xây Chat apps bên trong Google Chat, với messages/cards/dialogs, chứ không phải một embeddable Google Chat client.
+
+Vậy /booking hay landing page của Lunara sẽ có chat widget riêng:
+
+┌───────────────────────────────────────────────────────────────┐
+│ Lunara                                      👤 Nguyen     💬  │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│                     BOOKING PAGE                              │
+│                                                               │
+│                                                               │
+│                                            ┌────────────────┐ │
+│                                            │ Lunara AI      │ │
+│                                            │                │ │
+│                                            │ Xin chào 👋    │ │
+│                                            │ Tôi có thể giúp│ │
+│                                            │ bạn điều gì?   │ │
+│                                            │                │ │
+│                                            │ [...........]  │ │
+│                                            │             ➤  │ │
+│                                            └────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
+
+Nhưng phía sau widget đó và Google Chat là cùng một agent.
+
+Ví dụ customer
+
+Trên website:
+
+Customer:
+"Tôi có lịch nào sắp tới?"
+
+Lunara AI:
+
+┌───────────────────────────────┐
+│ Lịch hẹn sắp tới             │
+│                               │
+│ Massage thư giãn              │
+│ 16/09/2026                    │
+│ 14:00 - 15:00                 │
+│                               │
+│ [Xem vé]                      │
+└───────────────────────────────┘
+
+        [Mở trong Google Chat]
+
+Sau đó customer mở Google Chat:
+
+Lunara Assistant
+
+"Tôi muốn huỷ lịch đó"
+
+→ agent vẫn biết user là ai
+→ lấy booking của user
+→ confirm
+→ cancel thông qua Booking API
+
+Google Chat app cũng có thể dùng interactive cards và dialogs thay vì chỉ trả plain text.
+
+Manager cũng tương tự
+
+Trong admin web:
+
+/admin/dashboard
+
+                                       💬 Lunara Assistant
+
+Manager:
+"Hôm nay còn booking nào chưa có staff?"
+
+Agent:
+3 booking chưa được phân công
+
+#LNR-081    14:30
+#LNR-095    16:00
+#LNR-102    17:00
+
+Sau khi quản lý rời máy:
+
+Google Chat
+    ↓
+
+Manager:
+"Hôm nay doanh thu thế nào?"
+
+Lunara:
+8.400.000đ
+18 giao dịch
+
+Nghĩa là:
+
+Web Admin Agent
+       =
+Google Chat Manager Agent
+
+không phải hai chatbot khác nhau.
+
+Identity là phần quan trọng nhất
+
+Bạn đã dùng Google Auth, đây là lợi thế lớn.
+
+Mình sẽ có:
+
+User
+────────────────────────
+id
+google_subject_id
+email
+name
+role
+...
+
+Web login:
+
+Google Login
+    ↓
+Google identity
+    ↓
+sub = abc123
+    ↓
+Lunara User #42
+
+Google Chat:
+
+Google Chat User
+      ↓
+Account linking
+      ↓
+Google identity
+      ↓
+sub = abc123
+      ↓
+Lunara User #42
+
+Google cũng khuyến nghị khi Chat app kết nối với external service, dùng Google Sign-In/account linking và sub của identity token để liên kết account.
+
+Do đó:
+
+Website        Google Chat
+   │                │
+   └──── User #42 ──┘
+
+Role/permission cũng giống nhau ở cả hai nơi.
+
+Conversation cũng có thể cross-platform
+
+Nếu bạn muốn đúng nghĩa:
+
+chat trên web rồi sang Google Chat nói tiếp
+
+thì lưu conversation ở agent service:
+
+agent_conversation
+────────────────────────
+id
+user_id
+created_at
+
+
+agent_message
+────────────────────────
+id
+conversation_id
+channel
+role
+content
+created_at
+
+channel:
+
+WEB
+GOOGLE_CHAT
+
+Ví dụ:
+
+14:00  WEB
+User: Tôi còn lịch nào?
+
+14:00  WEB
+Agent: Bạn có một lịch...
+
+16:20  GOOGLE_CHAT
+User: Hủy lịch đó giúp tôi.
+
+16:20  GOOGLE_CHAT
+Agent: Bạn muốn hủy booking #LNR-123?
+
+Agent có cùng conversation context.
+
+Mình sẽ chỉ sync conversation state cần thiết, không cố làm website thành bản sao giao diện Google Chat.
+
+Web chat nên có một số UI Google Chat không cần giống hệt
+
+Ví dụ trên web bạn có thể render native React component:
+
+┌───────────────────────────────┐
+│ Massage thư giãn              │
+│ 16 Sep · 14:00                │
+│                               │
+│ [Xem vé]   [Huỷ lịch]         │
+└───────────────────────────────┘
+
+Google Chat thì agent adapter chuyển cùng data đó thành Google Chat Card:
+
+Agent result
+{
+   type: BOOKING_CARD,
+   booking: ...
+}
+          │
+     ┌────┴─────┐
+     ▼          ▼
+Web Renderer  Google Chat Renderer
+React Card    cardsV2
+
+Đây là design rất sạch.
+
+Agent architecture mình sẽ chốt
+                         ┌──────────────────┐
+                         │   Lunara Agent   │
+                         │ Python / FastAPI │
+                         └────────┬─────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │                           │
+               Channel Layer               Agent Core
+                    │                           │
+       ┌────────────┴──────────┐          LangGraph
+       │                       │               │
+ Web Adapter             Google Chat          │
+       │                   Adapter            │
+       │                       │               │
+       └────────────┬──────────┘               │
+                    │                           │
+                 Identity ───────────────► RBAC Guard
+                                                │
+                                                ▼
+                                           Tool Layer
+                                                │
+                                  ┌─────────────┼───────────┐
+                                  ▼             ▼           ▼
+                              Booking        Staff       Reports
+                                  │             │           │
+                                  └─────────────┴───────────┘
+                                                │
+                                                ▼
+                                      Spring Boot Backend
+
+Và realtime có thể chạy cả hai channel:
+
+BookingCreated
+      │
+      ├────────► WebSocket ─────► Admin Web
+      │
+      └────────► Google Chat ───► Manager
+
+Google Chat API cho phép Chat app gửi message vào user/space, bao gồm rich cards và interactive widgets.
+
+Với Lunara, mình sẽ chốt UX
+
+Customer: website có floating Lunara Assistant; Google Chat là channel thứ hai để xem booking, hỏi dịch vụ, quản lý lịch.
+
+Staff: Google Chat rất hợp cho Công việc của tôi, Lịch hôm nay.
+
+Lễ tân/Manager: web admin vẫn là giao diện chính; Google Chat đóng vai trò management copilot + notification channel.
+
+Một agent, một identity, một permission system, nhiều channel.
+
+Như vậy chữ cross-platform của project sẽ có ý nghĩa thực sự chứ không chỉ là “responsive web”.
+
+trước tiên tôi cần data về spa (chính sách, sản phẩm, ...) hãy cho tôi list spa xịn để crawl
+
+Có. Nếu mục tiêu là build knowledge base cho Lunara chatbot gồm dịch vụ, giá, thời lượng, chính sách, quy trình booking, wellness package… thì mình sẽ ưu tiên crawl website chính thức của các luxury spa/resort, vì dữ liệu sạch và có cấu trúc hơn các trang review.
+
+Six Senses Ninh Van Bay — nguồn mình ưu tiên số 1. Có treatment, wellness program, facilities, giờ hoạt động, mô tả liệu pháp và cả downloadable spa menu. Rất hợp để học cách tổ chức Service → Treatment → Program.
+Six Senses Ninh Van Bay Spa
+Anantara Hoi An Spa — cực tốt cho dataset service vì website hiện trực tiếp tên dịch vụ + mô tả + duration + price. Ví dụ các treatment 90 phút giá 3.500.000 VND, body exfoliant 45 phút giá 1.900.000 VND.
+Anantara Hoi An Spa & Wellness
+Four Seasons The Nam Hai – Heart of the Earth Spa — rất tốt để lấy taxonomy dịch vụ: bodywork, facial, scrubs/wraps, rituals, bathing, beauty, wellness, trẻ em, adolescent treatment… đồng thời có giờ hoạt động và wellness journey.
+Four Seasons The Nam Hai Spa
+Amanoi Wellness / Spa — rất tốt cho phần mô tả premium service và recommendation của chatbot: Vietnamese Massage, pressure-point treatment, face ritual, polish & wrap, journeys và treatment spaces.
+Amanoi Signature Treatments
+Banyan Tree Lăng Cô Spa — có treatment philosophy, signature rituals, wellbeing pillars, opening hours, contact và booking. Hợp để lấy cả service data lẫn nội dung FAQ/customer-service.
+Banyan Tree Lăng Cô Spa
+Six Senses Côn Đảo — cùng hệ Six Senses nhưng treatment khác Ninh Vân Bay, nên giúp dataset không bị một màu. Có Vietnamese Touch Therapy, facial, wellness programs, facilities và giờ hoạt động.
+Six Senses Con Dao Spa
+Le Spa du Metropole – Sofitel Legend Metropole Hanoi — đặc biệt đáng crawl cho Lunara nếu bạn muốn phong cách luxury spa tại Hà Nội. Có facilities, treatment concept, product brands sử dụng, opening hours và các seasonal offer có duration + price.
+Le Spa du Metropole
+Xuan Spa – Park Hyatt Saigon — dữ liệu gọn nhưng thực tế: treatment rooms, massage/facial/body wrap/salon services, giờ hoạt động và yêu cầu reservation. Tốt cho phần chatbot FAQ.
+Park Hyatt Saigon
+Spa L'Occitane en Provence – JW Marriott Hanoi — hợp để crawl service description, promotion/package và spa amenities. Hiện JW Marriott Hanoi có cả các spa retreat offer với điều kiện booking và ưu đãi.
+JW Marriott Hotel Hanoi
+Heavenly Spa by Westin Cam Ranh — nguồn rất tốt cho giá + thời lượng + promotion + terms. Trang hiện có massage, body care, facial cùng giá cụ thể và điều kiện offer.
+Heavenly Spa by Westin Cam Ranh
+
+Nếu crawl để build knowledge base, mình sẽ chuẩn hóa tất cả về schema kiểu:
+
+{
+  "spa": "Anantara Hoi An Spa",
+  "category": "Massage",
+  "service_name": "Anantara Signature Experience",
+  "description": "...",
+  "duration_minutes": 90,
+  "price": 3500000,
+  "currency": "VND",
+  "adjustable_duration": false,
+
+  "opening_hours": "...",
+
+  "booking_policy": "...",
+  "cancellation_policy": "...",
+  "arrival_policy": "...",
+  "age_policy": "...",
+  "payment_policy": "...",
+
+  "facilities": [],
+  "packages": [],
+  "promotions": [],
+
+  "source_url": "...",
+  "last_crawled_at": "..."
+}
+
+Cho Lunara, mình sẽ crawl trước Six Senses Ninh Van Bay + Anantara Hoi An + Four Seasons Nam Hai + Amanoi + Sofitel Metropole. Chỉ 5 nguồn này đã đủ tạo một dataset rất tốt về services + duration + pricing + descriptions + facilities + operational information, rồi mới bổ sung các nguồn khác để lấy thêm policy.
+
+Khi crawl, chỉ lấy nội dung public, tôn trọng robots.txt/điều khoản site và rate-limit request; không cần bypass login hay anti-bot.
+
+Hôm nay 11:40
+với những gì tôi nói với bạn. Hãy giúp tôi brainstorm xem agent này lên có node/tools gì cho customer, manager, staff ? 
+
+Với Lunara hiện tại, mình sẽ không làm 3 agent riêng. Nên có 1 agent graph chung, sau node xác thực + permission thì route sang 3 nhánh:
+
+                         USER MESSAGE
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │ Identity Node    │
+                    │ Google identity  │
+                    └────────┬─────────┘
+                             ▼
+                    ┌──────────────────┐
+                    │ Permission Node  │
+                    │ role + permission│
+                    └────────┬─────────┘
+                             ▼
+                    ┌──────────────────┐
+                    │ Intent Router    │
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         CUSTOMER         MANAGER          STAFF
+          SUBGRAPH         SUBGRAPH        SUBGRAPH
+              │              │              │
+              └──────────────┼──────────────┘
+                             ▼
+                     Confirmation Node
+                       nếu là write
+                             ▼
+                       Tool Execution
+                             ▼
+                    Response Formatter
+                             ▼
+                    Web / Google Chat
+
+Mình sẽ chia rõ Node và Tool như sau.
+
+1. Shared Nodes
+IdentityNode
+
+Xác định người đang nói chuyện là ai.
+
+Input:
+Google Chat user / Web JWT
+
+Output:
+user_id
+name
+role
+permissions
+
+Ví dụ:
+
+{
+  "user_id": 42,
+  "role": "THERAPIST",
+  "permissions": [
+    "MY_SCHEDULE_READ",
+    "MY_WORK_UPDATE"
+  ]
+}
+PermissionNode
+
+Không cho LLM tự quyết quyền.
+
+User
+ ↓
+Role
+ ↓
+Permissions
+ ↓
+Allowed Tools
+
+Ví dụ:
+
+Customer
+→ không thấy get_revenue
+
+Staff
+→ không thấy manage_service
+
+Manager
+→ được dùng get_revenue
+2. IntentRouterNode
+
+Phân loại request.
+
+Ví dụ:
+
+"Tôi còn lịch nào tuần này?"
+→ CUSTOMER_BOOKING_QUERY
+
+"15h Linh còn rảnh không?"
+→ STAFF_AVAILABILITY_QUERY
+
+"Doanh thu hôm nay?"
+→ REPORT_QUERY
+
+Không nhất thiết cần enum quá lớn. Có thể route trực tiếp theo tool category:
+
+KNOWLEDGE
+BOOKING
+SCHEDULE
+STAFF
+PAYMENT
+REPORT
+ACTION
+3. KnowledgeNode
+
+Đây là RAG node cho data spa mà bạn đang muốn crawl.
+
+Dùng cho:
+
+"Dịch vụ massage có gì?"
+"Massage đá nóng là gì?"
+"Chính sách huỷ lịch thế nào?"
+"Tôi nên đến trước bao lâu?"
+"Có dịch vụ nào 60 phút?"
+
+Nguồn:
+
+Spa knowledge base
+├── dịch vụ
+├── sản phẩm
+├── giá
+├── thời lượng
+├── policy
+├── FAQ
+└── hướng dẫn
+
+Tool:
+
+search_spa_knowledge(query)
+get_service_detail(service_id)
+list_services(category)
+
+Đây là tool dùng được cho cả customer, staff, manager.
+
+CUSTOMER SUBGRAPH
+
+Customer agent chủ yếu làm 3 việc:
+
+HỎI
+ĐẶT
+QUẢN LÝ BOOKING CỦA MÌNH
+Customer Nodes
+CustomerRouter
+│
+├── KnowledgeNode
+├── BookingDiscoveryNode
+├── BookingNode
+└── MyBookingNode
+Customer Tools
+list_services
+"Dịch vụ massage bên mình có gì?"
+
+Output:
+
+Massage thư giãn
+Trị liệu
+...
+get_service_detail
+"Massage thư giãn giá bao nhiêu?"
+
+Trả:
+
+Tên
+Mô tả
+Duration
+Minimum duration
+Price
+Có cho chỉnh duration hay không
+get_available_slots
+
+Cực kỳ quan trọng.
+
+service_ids
+staff_id?
+date
+durations
+
+Ví dụ:
+
+"Chiều mai tôi muốn massage 90 phút"
+
+Agent:
+
+get_available_slots(
+    service=massage,
+    duration=90,
+    date=tomorrow,
+    period=afternoon
+)
+get_available_staff
+"Ngày mai có ai làm massage?"
+create_booking
+services
+durations
+staff
+date
+start_time
+note
+
+Đây là write tool, cần confirmation.
+
+Bạn muốn đặt:
+
+Massage thư giãn
+90 phút
+16/09
+14:00
+Nhân viên Linh
+450K
+
+[Xác nhận]
+get_my_bookings
+"Lịch của tôi"
+"Tôi có lịch gì tuần này?"
+get_booking_detail
+"Cho tôi xem vé ABC123"
+cancel_booking
+
+Phải check:
+
+booking owner
+cancellation policy
+5-hour rule
+
+Sau đó confirm.
+
+reschedule_booking
+"Tôi muốn chuyển lịch chiều mai sang 4h"
+
+Flow:
+
+current booking
+    ↓
+get_available_slots
+    ↓
+show option
+    ↓
+confirm
+    ↓
+reschedule_booking
+Customer tools mình chốt
+CUSTOMER
+├── search_spa_knowledge
+├── list_services
+├── get_service_detail
+├── get_available_staff
+├── get_available_slots
+├── create_booking
+├── get_my_bookings
+├── get_booking_detail
+├── cancel_booking
+└── reschedule_booking
+
+10 tools là đủ.
+
+STAFF SUBGRAPH
+
+Staff ở đây là kỹ thuật viên spa.
+
+Nhu cầu của họ rất khác customer:
+
+Hôm nay tôi làm gì?
+Khách tiếp theo là ai?
+Booking hiện tại thế nào?
+Bắt đầu dịch vụ
+Hoàn thành dịch vụ
+Staff Nodes
+StaffRouter
+│
+├── MyWorkNode
+├── MyScheduleNode
+├── ServiceExecutionNode
+└── KnowledgeNode
+get_my_work
+
+Đây là tool quan trọng nhất cho staff.
+
+"Lịch làm việc hôm nay của tôi?"
+"Công việc tiếp theo?"
+
+Output:
+
+09:00 Massage - Nguyễn A
+11:00 Trị liệu - Trần B
+14:30 Massage - Lê C
+get_my_schedule
+
+Khác get_my_work một chút:
+
+get_my_work
+→ danh sách booking/work item
+
+get_my_schedule
+→ time blocks/calendar
+
+Ví dụ:
+
+"Thứ 6 tôi rảnh lúc nào?"
+get_assigned_booking
+
+Staff chỉ xem booking được assign cho mình.
+
+"Cho tôi xem khách 14h"
+
+Output chỉ nên có thông tin cần thiết:
+
+Tên khách
+Dịch vụ
+Thời gian
+Ghi chú
+start_service
+
+Transition:
+
+CHECKED_IN
+   ↓
+IN_SERVICE
+
+Ví dụ:
+
+"Bắt đầu booking ABC123"
+
+Agent confirm hoặc button:
+
+[Bắt đầu dịch vụ]
+complete_service
+IN_SERVICE
+   ↓
+COMPLETED
+get_service_instruction
+
+Có thể reuse RAG.
+
+"Quy trình massage thư giãn là gì?"
+Staff tools mình chốt
+STAFF
+├── search_spa_knowledge
+├── get_my_work
+├── get_my_schedule
+├── get_assigned_booking
+├── start_service
+└── complete_service
+
+Chỉ 6 tools, rất gọn.
+
+MANAGER SUBGRAPH
+
+Manager là phần agentic thú vị nhất.
+
+Nhu cầu chính:
+
+Tình hình hôm nay thế nào?
+Booking đang ra sao?
+Ai đang rảnh?
+Booking nào chưa assign?
+Doanh thu?
+Dịch vụ nào nhiều khách?
+Manager Nodes
+ManagerRouter
+│
+├── OperationsNode
+├── BookingManagementNode
+├── StaffManagementNode
+├── PaymentNode
+├── AnalyticsNode
+└── KnowledgeNode
+Operations tools
+get_today_overview
+
+Tool aggregate, rất đáng có.
+
+"Hôm nay tình hình thế nào?"
+
+Output:
+
+24 bookings
+8 completed
+3 in service
+11 upcoming
+2 cancelled
+
+Revenue: 8.4M
+
+Đỡ phải để agent gọi 5 API khác nhau.
+
+get_today_bookings
+"Lịch chiều nay?"
+"Còn booking nào pending?"
+
+Có filter:
+
+date
+status
+service
+staff
+get_booking_detail
+
+Manager xem bất kỳ booking nào.
+
+get_unassigned_bookings
+
+Rất thực tế:
+
+"Booking nào chưa có nhân viên?"
+Staff management tools
+get_staff_availability
+"15h ai rảnh?"
+get_staff_schedule
+"Hôm nay lịch của Linh thế nào?"
+assign_staff
+
+Write action.
+
+"Gán Linh cho booking ABC123"
+
+Agent:
+
+check availability
+      ↓
+ask confirmation
+      ↓
+assign_staff
+Booking management tools
+reschedule_booking
+
+Manager cũng dùng tool này.
+
+cancel_booking
+
+Nhưng permission rộng hơn customer.
+
+Payment tools
+get_payment_detail
+"Booking ABC123 thanh toán chưa?"
+get_payment_summary
+"Hôm nay đã thu bao nhiêu?"
+Analytics tools
+get_revenue_summary
+"Hôm nay doanh thu?"
+"Tuần này doanh thu?"
+get_booking_statistics
+"Dịch vụ nào được đặt nhiều nhất tuần này?"
+
+Output có thể gồm:
+
+booking count
+cancellation rate
+popular services
+peak hours
+
+Không cần tạo 10 analytics tools khác nhau.
+
+Manager tools mình chốt
+MANAGER
+├── search_spa_knowledge
+│
+├── get_today_overview
+├── get_today_bookings
+├── get_booking_detail
+├── get_unassigned_bookings
+│
+├── get_staff_availability
+├── get_staff_schedule
+├── assign_staff
+│
+├── reschedule_booking
+├── cancel_booking
+│
+├── get_payment_detail
+├── get_payment_summary
+│
+├── get_revenue_summary
+└── get_booking_statistics
+
+Khoảng 14 tools, vẫn kiểm soát được.
+
+Một node rất quan trọng: ConfirmationNode
+
+Không phải tool nào agent chọn cũng chạy ngay.
+
+Chia tool thành:
+
+READ TOOL
+→ chạy ngay
+
+WRITE TOOL
+→ confirm trước
+
+READ:
+
+get_my_bookings
+get_today_bookings
+get_revenue_summary
+get_staff_availability
+search_spa_knowledge
+
+WRITE:
+
+create_booking
+cancel_booking
+reschedule_booking
+assign_staff
+start_service
+complete_service
+
+Graph:
+
+Tool selected
+     │
+     ▼
+Is write operation?
+     │
+  ┌──┴───┐
+  │      │
+ NO     YES
+  │      │
+  ▼      ▼
+Execute Confirmation
+          │
+       confirmed?
+          │
+          ▼
+        Execute
+Response Node
+
+Không để từng tool tự format Google Chat.
+
+Tool chỉ trả structured data:
+
+{
+  "booking_id": "ABC123",
+  "service": "Massage thư giãn",
+  "start": "14:00",
+  "end": "15:00",
+  "status": "CONFIRMED"
+}
+
+Sau đó:
+
+ResponseFormatter
+      │
+      ├── Web
+      │    └── React Card
+      │
+      └── Google Chat
+           └── cardsV2
+
+Rất hợp với cross-platform mà bạn muốn.
+
+Agent Graph cuối cùng
+
+Mình sẽ chốt graph ở mức này:
+
+                       START
+                         │
+                         ▼
+                 Resolve Identity
+                         │
+                         ▼
+                 Load Permissions
+                         │
+                         ▼
+                 Understand Intent
+                         │
+                         ▼
+                   Role Router
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+    CUSTOMER           STAFF           MANAGER
+        │                │                │
+        ├─ Knowledge     ├─ My Work       ├─ Operations
+        ├─ Service       ├─ Schedule      ├─ Booking
+        ├─ Availability  ├─ Booking       ├─ Staff
+        └─ Booking       └─ Knowledge     ├─ Payment
+                                          ├─ Analytics
+                                          └─ Knowledge
+        │                │                │
+        └────────────────┼────────────────┘
+                         ▼
+                   Select Tool
+                         │
+                         ▼
+                  Permission Check
+                         │
+                         ▼
+                  Write operation?
+                     /       \
+                   NO         YES
+                   │           │
+                   │      Confirmation
+                   │           │
+                   └─────┬─────┘
+                         ▼
+                    Execute Tool
+                         │
+                         ▼
+                  Format Response
+                         │
+                 ┌───────┴────────┐
+                 ▼                ▼
+                WEB          GOOGLE CHAT
+
+Mình nghĩ đây là mức vừa đủ agentic nhưng chưa over-engineer. Tổng cộng bạn có khoảng:
+
+Shared       ~4 tools
+Customer    ~10 tools
+Staff        ~6 tools
+Manager     ~14 tools
+
+và rất nhiều tool được reuse giữa các role, nên thực tế code không phải 30 tool khác nhau. Agent khác nhau chủ yếu ở permission + context + allowed actions, không phải ở việc xây ba hệ thống riêng biệt.

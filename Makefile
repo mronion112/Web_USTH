@@ -18,14 +18,19 @@ REQUIRED_VARS = MYSQL_ROOT_PASSWORD MYSQL_PASSWORD SPRING_DATASOURCE_URL SPRING_
 INFRA_PATHS = Makefile templates/ .github/ docs/ database/expected_tables.txt .gitignore
 BASELINE ?= origin/main
 
-.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra
+# Chặn trường hợp áp patch dev-login rồi commit/push vào main.
+# Không quét Makefile/.github để tránh tự khớp chính pattern này.
+DEV_LOGIN_PATHS = backend/src frontend/lunara/src templates/docker-compose.yml templates/Dockerfile.frontend templates/.env.example
+DEV_LOGIN_PATTERN = DEV_LOGIN_PATCH_MARKER|DevAuthController|DevLoginPage|/dev/auth/login|APP_DEV_LOGIN_ENABLED|VITE_DEV_LOGIN
+
+.PHONY: help check-env up up-app chroma check-chroma test demo down logs seed wait-db schema seed-dataset seed-demo seed-test validate test-backend verify-infra verify-no-dev-login verify-dev-login-patch dev-login-on dev-login-off dev-login-apply dev-login-revert dev-login-env-on dev-login-env-off
 
 help:
 	@echo "Targets:"
-	@echo "  up           Khởi động MySQL + Redis"
+	@echo "  up           Khởi động MySQL + Redis + Kafka"
 	@echo "  chroma       Khởi động và kiểm tra Chroma DB"
 	@echo "  check-chroma Kiểm tra Chroma API heartbeat"
-	@echo "  up-app       Khởi động full stack (MySQL, Redis, Chroma, backend, frontend)"
+	@echo "  up-app       Khởi động full stack (MySQL, Redis, Kafka, Chroma, backend, frontend)"
 	@echo "  test         Khởi động hạ tầng + nạp dataset Testing + chạy backend tests"
 	@echo "  demo         Khởi động hạ tầng + nạp dataset Production + chạy full stack"
 	@echo "  down         Dừng stack local (giữ data trong volume)"
@@ -39,6 +44,10 @@ help:
 	@echo "  validate     Kiểm tra đủ bảng theo kỳ vọng"
 	@echo "  test-backend Chạy test backend với factory override (bỏ qua nếu chưa có code)"
 	@echo "  verify-infra Liệt kê file hạ tầng đổi khác so với baseline"
+	@echo "  verify-no-dev-login Chặn nếu patch dev-login đang được áp"
+	@echo "  verify-dev-login-patch Chặn nếu patch dev-login không còn áp được"
+	@echo "  dev-login-on  Áp patch dev-login, bật biến, chạy full stack"
+	@echo "  dev-login-off Gỡ patch dev-login, tắt biến, chạy full stack"
 
 check-env:
 	@test -f $(ENV_FILE) || (echo "Thiếu $(ENV_FILE). Chạy: cp templates/.env.example $(ENV_FILE)" >&2; exit 1)
@@ -49,7 +58,7 @@ check-env:
 	if [ -n "$$missing" ]; then echo "Thiếu biến trong $(ENV_FILE):$$missing" >&2; exit 1; fi
 
 up: check-env
-	$(COMPOSE) up -d --wait db redis
+	$(COMPOSE) up -d --wait db redis kafka
 
 chroma:
 	$(COMPOSE) up -d chroma
@@ -87,13 +96,13 @@ logs:
 	$(COMPOSE) logs -f $(SERVICE)
 
 seed: check-env wait-db
-	$(COMPOSE) up -d --wait db
 	$(COMPOSE) exec -T db mysql -h127.0.0.1 -uroot -p"$(MYSQL_ROOT_PASSWORD)" < database/Web_DataBase_USTH.sql
 	@echo "Đã nạp lại schema template từ database/Web_DataBase_USTH.sql (không kèm data)"
 
-# Chờ mysqld nhận kết nối TCP trong container (healthcheck qua socket
-# có thể xanh trước khi cổng TCP mở).
+# Khởi động db rồi chờ mysqld nhận kết nối TCP trong container
+# (healthcheck qua socket có thể xanh trước khi cổng TCP mở).
 wait-db: check-env
+	$(COMPOSE) up -d db
 	@echo "Đang chờ MySQL nhận TCP..."
 	@i=1; \
 	while [ $$i -le 30 ]; do \
@@ -167,3 +176,86 @@ verify-infra:
 	@git diff --name-status $(BASELINE)...HEAD -- $(INFRA_PATHS); \
 	git status --short -- $(INFRA_PATHS); \
 	echo "Xong. Trống nghĩa là hạ tầng khớp baseline."
+
+# Chặn commit/push khi patch dev-login còn áp (endpoint tạo tài khoản không mật khẩu).
+verify-no-dev-login:
+	@hits=$$(git grep --untracked -lE "$(DEV_LOGIN_PATTERN)" -- $(DEV_LOGIN_PATHS) || true); \
+	if [ -n "$$hits" ]; then echo "$$hits"; echo "Phát hiện dấu vết patch dev-login, gỡ trước khi commit/push: git apply -R templates/dev-login/dev-login.patch" >&2; exit 1; fi; \
+	echo "Không có dấu vết dev-login."
+
+# Bật/tắt nhanh dev-login: tự áp/gỡ patch và set biến trong templates/.env.
+# Lưu ý: khi đang bật, make verify-no-dev-login sẽ fail (đúng thiết kế).
+DEV_LOGIN_PATCH = templates/dev-login/dev-login.patch
+DEV_LOGIN_CODE_PATHS = backend/src frontend/lunara/src
+
+define set_env
+if grep -qE "^$(1)=" $(ENV_FILE); then sed -i "s|^$(1)=.*|$(1)=$(2)|" $(ENV_FILE); else [ -n "$$(tail -c1 $(ENV_FILE))" ] && printf '\n' >> $(ENV_FILE); printf '%s=%s\n' "$(1)" "$(2)" >> $(ENV_FILE); fi
+endef
+
+dev-login-on: dev-login-apply dev-login-env-on
+	@echo "Nạp mock dataset Testing để có roles/accounts..."
+	$(MAKE) --no-print-directory seed-test
+	@echo "Đang build lại full stack..."
+	$(MAKE) --no-print-directory up-app
+	@echo "Dev login bật. Mở http://localhost:5173/dev-login"
+
+dev-login-off: dev-login-revert dev-login-env-off
+	@echo "Đang build lại full stack..."
+	$(MAKE) --no-print-directory up-app
+	@echo "Dev login tắt."
+
+dev-login-apply:
+	@test -f $(DEV_LOGIN_PATCH) || (echo "Thiếu $(DEV_LOGIN_PATCH)" >&2; exit 1)
+	@if git grep --untracked -qE "DEV_LOGIN_PATCH_MARKER" -- $(DEV_LOGIN_CODE_PATHS) 2>/dev/null; then \
+		echo "Patch đã áp, bỏ qua."; \
+	else \
+		git apply $(DEV_LOGIN_PATCH) && echo "Đã áp patch dev-login."; \
+	fi
+
+dev-login-revert:
+	@if git grep --untracked -qE "DEV_LOGIN_PATCH_MARKER" -- $(DEV_LOGIN_CODE_PATHS) 2>/dev/null; then \
+		git apply -R $(DEV_LOGIN_PATCH) && echo "Đã gỡ patch dev-login."; \
+	else \
+		echo "Patch chưa áp, bỏ qua."; \
+	fi
+
+dev-login-env-on: check-env
+	@$(call set_env,APP_DEV_LOGIN_ENABLED,true)
+	@$(call set_env,VITE_DEV_LOGIN,true)
+	@echo "Đã bật APP_DEV_LOGIN_ENABLED và VITE_DEV_LOGIN trong $(ENV_FILE)"
+
+dev-login-env-off: check-env
+	@$(call set_env,APP_DEV_LOGIN_ENABLED,false)
+	@$(call set_env,VITE_DEV_LOGIN,false)
+	@echo "Đã tắt APP_DEV_LOGIN_ENABLED và VITE_DEV_LOGIN trong $(ENV_FILE)"
+
+# Danh sách file patch dev-login được phép đụng tới (không gồm file hạ tầng).
+DEV_LOGIN_ALLOWED_PATHS = \
+	backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevAuthController.java \
+	backend/src/main/java/com/kevin/lunaraspa/authentication_account/DevSecurityConfig.java \
+	backend/src/main/resources/application.yml \
+	frontend/lunara/src/App.tsx \
+	frontend/lunara/src/lib/api.ts \
+	frontend/lunara/src/pages/DevLoginPage.tsx \
+	frontend/lunara/src/pages/admin/AdminLoginPage.tsx \
+	templates/.env.example \
+	templates/Dockerfile.frontend \
+	templates/docker-compose.yml
+
+# Chặn khi patch dev-login không còn áp được lên main (upstream đổi làm lệch context).
+verify-dev-login-patch:
+	@test -f $(DEV_LOGIN_PATCH) || (echo "Thiếu $(DEV_LOGIN_PATCH)" >&2; exit 1)
+	@if git grep --untracked -qE "DEV_LOGIN_PATCH_MARKER" -- $(DEV_LOGIN_CODE_PATHS) 2>/dev/null; then \
+		echo "Patch đang áp, bỏ qua kiểm tra apply."; exit 0; \
+	fi; \
+	bad=""; \
+	for p in $$(git apply --numstat $(DEV_LOGIN_PATCH) | awk '{print $$3}'); do \
+		case " $(DEV_LOGIN_ALLOWED_PATHS) " in *" $$p "*) ;; *) bad="$$bad $$p";; esac; \
+	done; \
+	if [ -n "$$bad" ]; then echo "Patch đụng file ngoài danh sách cho phép:$$bad" >&2; exit 1; fi; \
+	if git apply --check $(DEV_LOGIN_PATCH) 2>/tmp/dev-login-apply.err; then \
+		echo "Patch áp được trên cây hiện tại."; \
+	else \
+		echo "Patch dev-login đã lệch so với main, cần tái tạo (xem templates/dev-login/README.md):" >&2; \
+		cat /tmp/dev-login-apply.err >&2; exit 1; \
+	fi

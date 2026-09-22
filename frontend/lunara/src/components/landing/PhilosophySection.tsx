@@ -126,8 +126,8 @@ export const PhilosophySection: React.FC = () => {
             </p>
             <div className="pt-2">
               <Button
-                onClick={() => navigate('/auth')}
-                className="rounded-full bg-white text-[#14271C] hover:bg-[#F8F9F5] font-semibold px-8 h-12 shadow-md hover:scale-105 transition-all"
+                onClick={() => navigate('/booking')}
+                className="rounded-full bg-white text-[#14271C] hover:bg-[#F8F9F5] font-semibold px-8 h-12 shadow-md hover:scale-105 transition-all cursor-pointer"
               >
                 Đặt Lịch Hẹn Ngay
               </Button>

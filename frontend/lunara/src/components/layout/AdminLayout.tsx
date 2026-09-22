@@ -4,14 +4,25 @@ import { AdminSidebar } from './AdminSidebar';
 import { AdminTopBar } from './AdminTopBar';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { AdminChatProvider, useAdminChat } from '@/contexts/AdminChatContext';
+import { AdminChatSidebar } from '@/components/chat/AdminChatSidebar';
 
-export const AdminLayout: React.FC = () => {
+const AdminLayoutContent: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { user, loading } = useAuth();
+  const { chatMode, setChatMode } = useAdminChat();
   const location = useLocation();
+
+  const home = user?.roleCode === 'THERAPIST' ? '/staff/my-work'
+    : user?.roleCode === 'ACCOUNTANT' ? '/admin/payments'
+      : user?.roleCode === 'RECEPTIONIST' ? '/admin/live' : '/admin/dashboard';
+
   if (loading) return <div className="p-8">Đang xác thực…</div>;
   if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
-  if (location.pathname.startsWith('/staff') && user.roleCode !== 'THERAPIST') return <Navigate to="/admin/dashboard" replace />;
+  if (location.pathname.startsWith('/staff') && user.roleCode !== 'THERAPIST') {
+    return <Navigate to={user.roleCode === 'CUSTOMER' ? '/booking' : '/admin/dashboard'} replace />;
+  }
+  if (location.pathname.startsWith('/admin') && user.roleCode === 'THERAPIST') return <Navigate to="/staff/my-work" replace />;
   if (location.pathname.startsWith('/admin') && user.roleCode === 'CUSTOMER') return <Navigate to="/booking" replace />;
 
   return (
@@ -33,7 +44,7 @@ export const AdminLayout: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen(false)}
-                className="p-1.5 rounded-full text-white/80 hover:text-white"
+                className="p-1.5 rounded-full text-white/80 hover:text-white cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -50,12 +61,12 @@ export const AdminLayout: React.FC = () => {
           <button
             type="button"
             onClick={() => setMobileSidebarOpen(true)}
-            className="p-2 rounded-xl text-[#14271C] hover:bg-[#F8F9F5]"
+            className="p-2 rounded-xl text-[#14271C] hover:bg-[#F8F9F5] cursor-pointer"
           >
             <Menu className="h-6 w-6" />
           </button>
 
-          <Link to="/admin/dashboard" className="font-display font-bold text-xl text-[#14271C]">
+          <Link to={home} className="font-display font-bold text-xl text-[#14271C]">
             Lunara Admin
           </Link>
 
@@ -65,11 +76,24 @@ export const AdminLayout: React.FC = () => {
         {/* Desktop TopBar */}
         <AdminTopBar />
 
-        {/* Dynamic Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-10 bg-[#F8F9F5]">
-          <Outlet />
-        </main>
+        {/* Dynamic Page Content + Right Chat Sidebar */}
+        <div className="flex flex-1 min-h-0 overflow-hidden relative">
+          <main className="flex-1 overflow-y-auto p-6 lg:p-10 bg-[#F8F9F5]">
+            <Outlet />
+          </main>
+
+          {/* Admin Ops Chat Right Sidebar */}
+          <AdminChatSidebar mode={chatMode} onModeChange={setChatMode} />
+        </div>
       </div>
     </div>
+  );
+};
+
+export const AdminLayout: React.FC = () => {
+  return (
+    <AdminChatProvider>
+      <AdminLayoutContent />
+    </AdminChatProvider>
   );
 };

@@ -1,72 +1,101 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { api, events } from '@/lib/api';
-import { MOCK_PAYMENTS } from '@/data/mock-payments';
-import { Payment } from '@/types';
-import { Search, Download, QrCode, CheckCircle2, ShieldCheck, ChevronRight } from 'lucide-react';
+import { paymentsApi, ApiPayment, ApiSepayTransaction } from '@/lib/api';
+import { Search, QrCode, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react';
+import { useRefresh } from '@/lib/use-refresh';
 
 export const PaymentsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [payments, setPayments] = useState<Payment[]>(MOCK_PAYMENTS);
-  const [selectedTx, setSelectedTx] = useState<Payment | null>(null);
+  const [payments, setPayments] = useState<ApiPayment[]>([]);
+  const [selectedTx, setSelectedTx] = useState<ApiPayment | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [manualReview, setManualReview] = useState<ApiSepayTransaction[]>([]);
+  const [reconcilePaymentIds, setReconcilePaymentIds] = useState<Record<number, string>>({});
 
-  const reload = useCallback(() => {
-    api<any[]>('/api/v1/admin/payments')
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const normalized: Payment[] = data.map((d) => ({
-            id: d.id,
-            transactionCode: d.transactionCode || d.id,
-            bookingId: d.bookingId || '',
-            bookingCode: d.bookingCode,
-            customerName: d.customerName || 'Khách hàng',
-            status: d.status,
-            method: 'QR',
-            amount: d.amount,
-            paidAt: d.paidAt,
-            createdAt: d.createdAt || new Date().toISOString(),
-          }));
-          setPayments(normalized);
-        }
-      })
-      .catch(() => {
-        // Fallback to MOCK_PAYMENTS when API is offline
-      });
-  }, []);
+  const reload = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const [data, review] = await Promise.all([
+        paymentsApi.getAll({ search: search.trim() || undefined, status: statusFilter, size: 100 }, signal),
+        paymentsApi.getSepayTransactions('MANUAL_REVIEW', signal),
+      ]);
+      if (Array.isArray(data)) {
+        setPayments(data);
+      }
+      setManualReview(Array.isArray(review) ? review : []);
+    } catch {
+      // The transport retries on its next cycle.
+    } finally {
+      setLoading(false);
+    }
+  }, [search, statusFilter]);
 
-  useEffect(() => {
-    void reload();
-    const source = events();
-    source.addEventListener('payment.events', reload);
-    const poll = window.setInterval(reload, 10000);
-    return () => {
-      source.close();
-      window.clearInterval(poll);
-    };
-  }, [reload]);
+  useRefresh('payment', reload);
 
-  const filtered = payments.filter((p) => {
-    const matchSearch =
-      p.bookingCode?.toLowerCase().includes(search.toLowerCase()) ||
-      (p.customerName && p.customerName.toLowerCase().includes(search.toLowerCase())) ||
-      p.transactionCode.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'ALL' || p.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const paid = payments.filter((p) => p.status === 'PAID').reduce((sum, p) => sum + Number(p.amount), 0);
+  const unpaid = payments.filter((p) => p.status === 'UNPAID').reduce((sum, p) => sum + Number(p.amount), 0);
+  const refunded = payments.filter((p) => p.status === 'REFUNDED').reduce((sum, p) => sum + Number(p.amount), 0);
 
-  const paid = payments.filter((p) => p.status === 'PAID').reduce((sum, p) => sum + p.amount, 0);
-  const unpaid = payments.filter((p) => p.status === 'UNPAID').reduce((sum, p) => sum + p.amount, 0);
-  const refunded = payments.filter((p) => p.status === 'REFUNDED').reduce((sum, p) => sum + p.amount, 0);
-
-  const handleOpenDetail = (tx: Payment) => {
+  const handleOpenDetail = (tx: ApiPayment) => {
     setSelectedTx(tx);
     setDetailModalOpen(true);
+  };
+
+  const handleMarkPaid = async () => {
+    if (!selectedTx) return;
+    setActionLoading(true);
+    try {
+      await paymentsApi.markPaid(selectedTx.id, selectedTx.transactionCode);
+      setSelectedTx({ ...selectedTx, status: 'PAID', paidAt: new Date().toISOString() });
+      setSuccessMsg(`Đã xác nhận thanh toán thành công cho giao dịch ${selectedTx.transactionCode}`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      await reload();
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi xác nhận thanh toán');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!selectedTx || !window.confirm(`Xác nhận hoàn tiền cho giao dịch ${selectedTx.transactionCode}?`)) return;
+    setActionLoading(true);
+    try {
+      await paymentsApi.refund(selectedTx.id);
+      setSelectedTx({ ...selectedTx, status: 'REFUNDED' });
+      setSuccessMsg(`Đã hoàn tiền thành công cho giao dịch ${selectedTx.transactionCode}`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      await reload();
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi hoàn tiền');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReconcile = async (transaction: ApiSepayTransaction, action: 'CONFIRM' | 'IGNORE') => {
+    const paymentId = Number(reconcilePaymentIds[transaction.sepayId]);
+    if (action === 'CONFIRM' && (!paymentId || paymentId <= 0)) {
+      alert('Nhập Payment ID cần khớp trước khi xác nhận.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await paymentsApi.reconcileSepay(transaction.sepayId, action, action === 'CONFIRM' ? paymentId : undefined);
+      setSuccessMsg(action === 'CONFIRM' ? `Đã đối soát giao dịch SePay #${transaction.sepayId}` : `Đã bỏ qua giao dịch SePay #${transaction.sepayId}`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      await reload();
+    } catch (err: any) {
+      alert(err.message || 'Không thể xử lý giao dịch SePay');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
@@ -78,37 +107,47 @@ export const PaymentsPage: React.FC = () => {
             Thanh toán & Giao dịch
           </h1>
           <p className="text-xs text-[#6B726C] mt-1">
-            Đối soát dòng tiền qua hình thức duy nhất: Cổng chuyển khoản VietQR tự động
+            Đối soát dòng tiền và lịch sử giao dịch trực tiếp từ cơ sở dữ liệu ({payments.length} hóa đơn)
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 rounded-full bg-[#E8F5E9] px-3.5 py-1.5 border border-[#2E7D32]/20 text-xs font-semibold text-[#1E3B2B]">
             <QrCode className="h-4 w-4 text-[#2E7D32]" />
-            <span>Phương thức thanh toán: 100% VietQR</span>
+            <span>Phương thức: VietQR & Tại Spa</span>
           </div>
 
-          <Button variant="outline" className="text-xs h-10 border-[#D9E5DC]">
-            <Download className="h-4 w-4 mr-1.5 text-[#8EAA97]" /> Xuất sao kê Excel
+          <Button
+            variant="outline"
+            onClick={() => reload()}
+            className="text-xs h-10 border-[#D9E5DC] cursor-pointer"
+          >
+            <RefreshCw className="h-4 w-4 mr-1.5 text-[#8EAA97]" /> Làm mới
           </Button>
         </div>
       </div>
 
+      {successMsg && (
+        <div className="rounded-xl bg-[#E8F5E9] border border-[#2E7D32]/20 p-3.5 text-xs text-[#1E3B2B] font-medium animate-in fade-in">
+          ✓ {successMsg}
+        </div>
+      )}
+
       {/* 3 KPI Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <Card className="p-6 space-y-2">
+        <Card className="p-6 space-y-2 border border-[#E2E8E3] shadow-luxury">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#8EAA97]">
-            Tổng đã thu qua VietQR
+            Tổng doanh thu đã thu
           </span>
           <div className="font-display text-3xl font-bold text-[#14271C]">
             {paid.toLocaleString('vi-VN')} đ
           </div>
           <p className="text-xs text-[#2E7D32] flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Giao dịch khớp lệnh tự động
+            <CheckCircle2 className="h-3.5 w-3.5" /> Giao dịch khớp lệnh thực tế
           </p>
         </Card>
 
-        <Card className="p-6 space-y-2">
+        <Card className="p-6 space-y-2 border border-[#E2E8E3] shadow-luxury">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#8EAA97]">
             Chờ thanh toán (Pending)
           </span>
@@ -116,199 +155,253 @@ export const PaymentsPage: React.FC = () => {
             {unpaid.toLocaleString('vi-VN')} đ
           </div>
           <p className="text-xs text-[#526056]">
-            ○ {payments.filter((p) => p.status === 'UNPAID').length} lịch hẹn đang chờ quét mã
+            ○ {payments.filter((p) => p.status === 'UNPAID').length} lịch hẹn đang chờ thu tiền
           </p>
         </Card>
 
-        <Card className="p-6 space-y-2">
+        <Card className="p-6 space-y-2 border border-[#E2E8E3] shadow-luxury">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#8EAA97]">
-            Hoàn tiền (Refunded)
+            Đã hoàn tiền (Refunded)
           </span>
-          <div className="font-display text-3xl font-bold text-[#6B726C]">
+          <div className="font-display text-3xl font-bold text-[#BA1A1A]">
             {refunded.toLocaleString('vi-VN')} đ
           </div>
-          <p className="text-xs text-[#6B726C]">Giao dịch đã xác nhận hoàn về tài khoản</p>
+          <p className="text-xs text-[#BA1A1A]/80">
+            ○ {payments.filter((p) => p.status === 'REFUNDED').length} khoản hủy lịch
+          </p>
         </Card>
       </div>
 
-      {/* Filter Toolbar & Transactions Table */}
-      <Card className="overflow-hidden">
-        <div className="p-4 border-b border-[#E2E8E3] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8EAA97]" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm mã đặt lịch, mã giao dịch, tên khách..."
-              className="pl-10 text-xs h-9 bg-[#F8F9F5]"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-9 px-3 rounded-lg border border-[#E2E8E3] bg-white text-xs text-[#14271C]"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="PAID">Đã thanh toán (PAID)</option>
-              <option value="UNPAID">Chờ thanh toán (UNPAID)</option>
-              <option value="FAILED">Thất bại (FAILED)</option>
-              <option value="REFUNDED">Đã hoàn tiền (REFUNDED)</option>
-            </select>
-          </div>
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8EAA97]" />
+          <Input
+            placeholder="Tìm theo mã GD, mã vé hoặc khách hàng..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-10 text-xs rounded-xl bg-white border-[#E2E8E3]"
+          />
         </div>
 
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1">
+          {['ALL', 'PAID', 'UNPAID', 'REFUNDED'].map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                statusFilter === st
+                  ? 'bg-[#1E3B2B] text-white'
+                  : 'bg-white border border-[#E2E8E3] text-[#526056] hover:border-[#1E3B2B]'
+              }`}
+            >
+              {st === 'ALL' ? 'Tất cả' : st === 'PAID' ? 'Đã thu' : st === 'UNPAID' ? 'Chờ thanh toán' : 'Hoàn tiền'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Payments Table */}
+      <Card className="overflow-hidden border border-[#E2E8E3] shadow-luxury">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-[#F8F9F5] border-b border-[#E2E8E3] text-[#6B726C] uppercase font-semibold">
-              <tr>
-                <th className="py-3.5 px-6">Mã giao dịch</th>
-                <th className="py-3.5 px-6">Mã đặt lịch</th>
-                <th className="py-3.5 px-6">Khách hàng</th>
-                <th className="py-3.5 px-6">Phương thức</th>
-                <th className="py-3.5 px-6 text-right">Số tiền</th>
-                <th className="py-3.5 px-6">Trạng thái</th>
-                <th className="py-3.5 px-6">Thời gian</th>
-                <th className="py-3.5 px-6 text-right">Chi tiết</th>
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-[#E2E8E3] bg-[#FAFBF9] text-[#718276] uppercase tracking-wider font-semibold">
+                <th className="py-3 px-6">Mã giao dịch</th>
+                <th className="py-3 px-6">Mã lịch hẹn</th>
+                <th className="py-3 px-6">Khách hàng</th>
+                <th className="py-3 px-6">Phương thức</th>
+                <th className="py-3 px-6">Số tiền</th>
+                <th className="py-3 px-6">Thời gian</th>
+                <th className="py-3 px-6">Trạng thái</th>
+                <th className="py-3 px-6 text-right">Chi tiết</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8E3]">
-              {filtered.map((tx) => (
-                <tr
-                  key={tx.id}
-                  onClick={() => handleOpenDetail(tx)}
-                  className="hover:bg-[#F8F9F5]/80 transition-colors cursor-pointer"
-                >
-                  <td className="py-4 px-6 font-mono font-bold text-[#1E3B2B]">
-                    {tx.transactionCode}
-                  </td>
-                  <td className="py-4 px-6 font-mono text-[#526056] font-semibold">
-                    {tx.bookingCode}
-                  </td>
-                  <td className="py-4 px-6 font-medium text-[#14271C]">
-                    {tx.customerName || 'Khách hàng Lunara'}
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-[#1E3B2B] bg-[#E8F5E9] px-2.5 py-1 rounded-full text-[11px]">
-                      <QrCode className="h-3.5 w-3.5 text-[#2E7D32]" />
-                      Quét mã VietQR
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-right font-display font-bold text-sm text-[#14271C]">
-                    {tx.amount.toLocaleString('vi-VN')} đ
-                  </td>
-                  <td className="py-4 px-6">
-                    <Badge
-                      variant={
-                        tx.status === 'PAID'
-                          ? 'success'
-                          : tx.status === 'FAILED'
-                          ? 'danger'
-                          : tx.status === 'REFUNDED'
-                          ? 'outline'
-                          : 'warning'
-                      }
-                    >
-                      {tx.status === 'PAID'
-                        ? '✓ ĐÃ THU'
-                        : tx.status === 'FAILED'
-                        ? '✕ THẤT BẠI'
-                        : tx.status === 'REFUNDED'
-                        ? '↩ HOÀN TIỀN'
-                        : '○ CHỜ THANH TOÁN'}
-                    </Badge>
-                  </td>
-                  <td className="py-4 px-6 text-[#6B726C]">
-                    {tx.paidAt
-                      ? new Date(tx.paidAt).toLocaleString('vi-VN', {
-                          timeZone: 'Asia/Ho_Chi_Minh',
-                        })
-                      : 'Đang xử lý'}
-                  </td>
-                  <td className="py-4 px-6 text-right text-[#8EAA97]">
-                    <ChevronRight className="h-4 w-4 inline-block" />
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-[#8EAA97]">
+                    Đang tải danh sách giao dịch từ database...
                   </td>
                 </tr>
-              ))}
+              ) : payments.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-[#8EAA97]">
+                    Không tìm thấy giao dịch nào
+                  </td>
+                </tr>
+              ) : (
+                payments.map((p) => (
+                  <tr key={p.id} className="hover:bg-[#FAFBF9] transition-colors">
+                    <td className="py-4 px-6 font-semibold text-[#14271C]">{p.transactionCode}</td>
+                    <td className="py-4 px-6 text-[#1E3B2B] font-medium">{p.bookingCode || `#${p.bookingId}`}</td>
+                    <td className="py-4 px-6 text-[#14271C]">{p.customerName || 'Khách hàng'}</td>
+                    <td className="py-4 px-6">
+                      <span className="px-2 py-0.5 rounded bg-[#FAFBF9] border border-[#E2E8E3] text-[11px] font-semibold text-[#526056]">
+                        {p.paymentProvider || p.method}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 font-semibold text-[#14271C]">
+                      {Number(p.amount).toLocaleString('vi-VN')} đ
+                    </td>
+                    <td className="py-4 px-6 text-[#526056]">
+                      {new Date(p.createdAt || p.paidAt || Date.now()).toLocaleString('vi-VN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="py-4 px-6">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                          p.status === 'PAID'
+                            ? 'bg-[#E8F5E9] text-[#2E7D32]'
+                            : p.status === 'UNPAID'
+                            ? 'bg-[#FFF3E0] text-[#E65100]'
+                            : 'bg-[#FCE8E6] text-[#BA1A1A]'
+                        }`}
+                      >
+                        {p.status === 'PAID' ? 'Đã thu' : p.status === 'UNPAID' ? 'Chờ thanh toán' : 'Đã hoàn'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDetail(p)}
+                        className="h-8 text-xs text-[#1E3B2B] hover:bg-[#E8F0EA] cursor-pointer"
+                      >
+                        Xem <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* Transaction Detail Dialog Modal */}
+      {manualReview.length > 0 && (
+        <Card className="overflow-hidden border border-[#E6B85C]/40 shadow-luxury">
+          <div className="p-5 border-b border-[#E2E8E3] bg-[#FFF8E7]">
+            <h2 className="font-display text-xl font-semibold text-[#14271C]">SePay cần đối soát thủ công</h2>
+            <p className="text-xs text-[#6B726C] mt-1">Giao dịch sai mã, sai số tiền hoặc sai tài khoản không được tự động xác nhận booking.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#E2E8E3] text-[#718276] uppercase tracking-wider">
+                  <th className="p-4">SePay ID</th><th className="p-4">Nội dung</th><th className="p-4">Số tiền</th><th className="p-4">Lý do</th><th className="p-4">Xử lý</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8E3]">
+                {manualReview.map((transaction) => (
+                  <tr key={transaction.sepayId}>
+                    <td className="p-4 font-semibold">#{transaction.sepayId}</td>
+                    <td className="p-4"><div>{transaction.paymentCode || transaction.content || 'Không có mã'}</div><div className="text-[#8EAA97]">{transaction.referenceCode}</div></td>
+                    <td className="p-4 font-semibold">{Number(transaction.transferAmount).toLocaleString('vi-VN')} đ</td>
+                    <td className="p-4 text-[#BA1A1A]">{transaction.reviewReason}</td>
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <Input className="w-24 h-9" inputMode="numeric" placeholder="Payment ID" value={reconcilePaymentIds[transaction.sepayId] || ''} onChange={(event) => setReconcilePaymentIds((current) => ({ ...current, [transaction.sepayId]: event.target.value }))} />
+                        <Button disabled={actionLoading} className="h-9 text-xs" onClick={() => void handleReconcile(transaction, 'CONFIRM')}>Khớp</Button>
+                        <Button disabled={actionLoading} variant="outline" className="h-9 text-xs" onClick={() => void handleReconcile(transaction, 'IGNORE')}>Bỏ qua</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Transaction Detail Modal */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         {selectedTx && (
-          <div className="space-y-4 font-body">
-            <DialogHeader>
-              <div className="flex items-center gap-2">
-                <span className="h-8 w-8 rounded-full bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center">
-                  <QrCode className="h-4 w-4" />
-                </span>
-                <div>
-                  <DialogTitle>Giao dịch VietQR: {selectedTx.transactionCode}</DialogTitle>
-                  <DialogDescription>Mã đặt lịch: #{selectedTx.bookingCode}</DialogDescription>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 font-body">
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-luxury border border-[#E2E8E3] animate-in fade-in zoom-in-95 space-y-4">
+              <DialogHeader>
+                <DialogTitle className="font-display text-xl text-[#14271C]">
+                  Chi tiết giao dịch
+                </DialogTitle>
+                <DialogDescription className="text-xs text-[#6B726C]">
+                  Mã tham chiếu: {selectedTx.transactionCode}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-2xl bg-[#FAFBF9] border border-[#E2E8E3] space-y-2.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Khách hàng:</span>
+                  <span className="font-semibold text-[#14271C]">{selectedTx.customerName || 'Khách hàng'}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Mã lịch hẹn:</span>
+                  <span className="font-semibold text-[#1E3B2B]">{selectedTx.bookingCode || `#${selectedTx.bookingId}`}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Phương thức:</span>
+                  <span className="font-semibold text-[#14271C]">{selectedTx.method}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Số tiền:</span>
+                  <span className="font-bold text-[#1E3B2B] text-base">
+                    {Number(selectedTx.amount).toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8EAA97]">Thời gian ghi nhận:</span>
+                  <span className="text-[#526056]">
+                    {selectedTx.createdAt ? new Date(selectedTx.createdAt).toLocaleString('vi-VN') : '—'}
+                  </span>
+                </div>
+                {selectedTx.paidAt && (
+                  <div className="flex justify-between">
+                    <span className="text-[#8EAA97]">Thời gian khớp lệnh:</span>
+                    <span className="text-[#2E7D32] font-medium">
+                      {new Date(selectedTx.paidAt).toLocaleString('vi-VN')}
+                    </span>
+                  </div>
+                )}
               </div>
-            </DialogHeader>
 
-            <div className="rounded-2xl bg-[#F8F9F5] p-4 border border-[#E2E8E3] space-y-3 text-xs">
-              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8E3]">
-                <span className="text-[#6B726C]">Khách hàng</span>
-                <span className="font-semibold text-[#14271C]">{selectedTx.customerName}</span>
+              {/* Actions for UNPAID and PAID */}
+              <div className="flex gap-2 pt-2">
+                {selectedTx.status === 'UNPAID' && (
+                  <Button
+                    onClick={handleMarkPaid}
+                    disabled={actionLoading}
+                    className="flex-1 rounded-xl bg-[#2E7D32] text-white hover:bg-[#1B5E20] text-xs h-10 font-semibold cursor-pointer"
+                  >
+                    Xác nhận đã nhận tiền (Paid)
+                  </Button>
+                )}
+
+                {selectedTx.status === 'PAID' && (
+                  <Button
+                    onClick={handleRefund}
+                    disabled={actionLoading}
+                    variant="outline"
+                    className="flex-1 rounded-xl border-[#BA1A1A] text-[#BA1A1A] hover:bg-[#BA1A1A]/10 text-xs h-10 font-semibold cursor-pointer"
+                  >
+                    Hoàn tiền (Refund)
+                  </Button>
+                )}
               </div>
-              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8E3]">
-                <span className="text-[#6B726C]">Số tiền giao dịch</span>
-                <span className="font-display font-bold text-base text-[#1E3B2B]">
-                  {selectedTx.amount.toLocaleString('vi-VN')} đ
-                </span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8E3]">
-                <span className="text-[#6B726C]">Phương thức</span>
-                <span className="font-semibold text-[#14271C]">Chuyển khoản VietQR tức thì</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8E3]">
-                <span className="text-[#6B726C]">Ngân hàng thụ hưởng</span>
-                <span className="font-semibold text-[#14271C]">VietinBank · 10987654321</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8E3]">
-                <span className="text-[#6B726C]">Nội dung chuyển khoản (Memo)</span>
-                <span className="font-mono font-bold text-[#1E3B2B]">
-                  LNR {selectedTx.bookingCode}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[#6B726C]">Trạng thái giao dịch</span>
-                <Badge
-                  variant={
-                    selectedTx.status === 'PAID'
-                      ? 'success'
-                      : selectedTx.status === 'REFUNDED'
-                      ? 'outline'
-                      : 'warning'
-                  }
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDetailModalOpen(false)}
+                  className="rounded-xl text-xs w-full"
                 >
-                  {selectedTx.status === 'PAID'
-                    ? '✓ Khớp lệnh tự động thành công'
-                    : selectedTx.status}
-                </Badge>
-              </div>
+                  Đóng
+                </Button>
+              </DialogFooter>
             </div>
-
-            <div className="flex items-center gap-1.5 text-[11px] text-[#8EAA97] justify-center">
-              <ShieldCheck className="h-3.5 w-3.5 text-[#2E7D32]" />
-              Xác thực qua Webhook Napas/VietQR bảo mật thời gian thực
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setDetailModalOpen(false)}
-                className="w-full text-xs h-10"
-              >
-                Đóng
-              </Button>
-            </DialogFooter>
           </div>
         )}
       </Dialog>

@@ -1,0 +1,121 @@
+id,booking_id,event_type,actor_account_id,message,occurred_at
+1,8,CREATED,3,Booking LNR-20260528-00008 được tạo.,2026-05-14 04:00:00
+2,8,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #5.,2026-05-14 04:05:00
+3,8,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-05-14 04:10:00
+4,8,CHECKED_IN,3,Khách đã check-in tại spa.,2026-05-28 10:03:00
+5,8,SERVICE_STARTED,5,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-05-28 10:20:00
+6,8,COMPLETED,5,Booking đã hoàn thành.,2026-05-28 11:49:00
+7,25,CREATED,3,Booking LNR-20260624-00025 được tạo.,2026-06-16 15:15:00
+8,25,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #7.,2026-06-16 15:20:00
+9,25,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-06-16 15:25:00
+10,25,CHECKED_IN,3,Khách đã check-in tại spa.,2026-06-24 14:55:00
+11,25,SERVICE_STARTED,7,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-06-24 15:18:00
+12,25,COMPLETED,7,Booking đã hoàn thành.,2026-06-24 16:43:00
+13,9,CREATED,3,Booking LNR-20260807-00009 được tạo.,2026-07-28 06:45:00
+14,9,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #6.,2026-07-28 06:50:00
+15,17,CREATED,3,Booking LNR-20260801-00017 được tạo.,2026-07-30 09:15:00
+16,17,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #6.,2026-07-30 09:20:00
+17,17,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-07-30 09:25:00
+18,17,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-01 11:25:00
+19,17,SERVICE_STARTED,6,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-01 11:35:00
+20,17,COMPLETED,6,Booking đã hoàn thành.,2026-08-01 12:48:00
+21,29,CREATED,3,Booking LNR-20260813-00029 được tạo.,2026-08-03 08:00:00
+22,29,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #4.,2026-08-03 08:05:00
+23,30,CREATED,10,Booking LNR-20260819-00030 được tạo.,2026-08-04 14:15:00
+24,30,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #5.,2026-08-04 14:20:00
+25,9,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-07 11:38:00
+26,9,SERVICE_STARTED,6,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-07 11:47:00
+27,9,COMPLETED,6,Booking đã hoàn thành.,2026-08-07 13:45:00
+28,3,CREATED,3,Booking LNR-20260822-00003 được tạo.,2026-08-08 12:30:00
+29,3,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #5.,2026-08-08 12:35:00
+30,3,PAYMENT_RECEIVED,\N,Thanh toán PAY-20260822-00003 thành công.,2026-08-09 08:36:00
+31,28,CREATED,3,Booking LNR-20260820-00028 được tạo.,2026-08-10 12:00:00
+32,28,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #5.,2026-08-10 12:05:00
+33,28,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-08-10 12:10:00
+34,29,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-13 11:55:00
+35,29,SERVICE_STARTED,4,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-13 12:23:00
+36,29,COMPLETED,4,Booking đã hoàn thành.,2026-08-13 13:49:00
+37,30,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-19 14:03:00
+38,30,SERVICE_STARTED,5,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-19 14:21:00
+39,30,COMPLETED,5,Booking đã hoàn thành.,2026-08-19 15:35:00
+40,15,CREATED,3,Booking LNR-20260824-00015 được tạo.,2026-08-20 11:15:00
+41,15,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #5.,2026-08-20 11:20:00
+42,15,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-08-20 11:25:00
+43,28,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-20 15:48:00
+44,28,SERVICE_STARTED,5,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-20 16:00:00
+45,28,COMPLETED,5,Booking đã hoàn thành.,2026-08-20 17:28:00
+46,15,PAYMENT_RECEIVED,\N,Thanh toán PAY-20260824-00015 thành công.,2026-08-21 07:56:00
+47,3,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-22 14:42:00
+48,3,SERVICE_STARTED,5,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-22 15:04:00
+49,3,COMPLETED,5,Booking đã hoàn thành.,2026-08-22 16:04:00
+50,26,CREATED,11,Booking LNR-20260904-00026 được tạo.,2026-08-23 07:45:00
+51,26,STAFF_ASSIGNED,11,Đã phân công kỹ thuật viên #4.,2026-08-23 07:50:00
+52,26,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-08-23 07:55:00
+53,15,CHECKED_IN,3,Khách đã check-in tại spa.,2026-08-24 13:42:00
+54,15,SERVICE_STARTED,5,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-08-24 14:06:00
+55,15,COMPLETED,5,Booking đã hoàn thành.,2026-08-24 15:33:00
+56,1,CREATED,3,Booking LNR-20260915-00001 được tạo.,2026-08-25 08:30:00
+57,1,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #4.,2026-08-25 08:35:00
+58,1,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-08-25 08:40:00
+59,1,PAYMENT_RECEIVED,\N,Thanh toán PAY-20260915-00001 thành công.,2026-08-25 15:47:00
+60,11,CREATED,3,Booking LNR-20260921-00011 được tạo.,2026-08-27 12:30:00
+61,11,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #7.,2026-08-27 12:35:00
+62,11,PAYMENT_RECEIVED,\N,Thanh toán PAY-20260921-00011 thành công.,2026-08-28 09:02:00
+63,11,RESCHEDULED,3,Đổi lịch sang 2026-09-21 12:30:00.,2026-08-28 16:30:00
+64,12,CREATED,9,Booking LNR-20260915-00012 được tạo.,2026-09-02 02:30:00
+65,12,STAFF_ASSIGNED,9,Đã phân công kỹ thuật viên #4.,2026-09-02 02:35:00
+66,26,CHECKED_IN,3,Khách đã check-in tại spa.,2026-09-04 13:05:00
+67,26,SERVICE_STARTED,4,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-09-04 13:23:00
+68,26,COMPLETED,4,Booking đã hoàn thành.,2026-09-04 14:23:00
+69,18,CREATED,3,Booking LNR-20260915-00018 được tạo.,2026-09-07 12:15:00
+70,18,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #6.,2026-09-07 12:20:00
+71,18,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-07 12:25:00
+72,18,PAYMENT_RECEIVED,\N,Thanh toán PAY-20260915-00018 thành công.,2026-09-07 15:43:00
+73,22,CREATED,3,Booking LNR-20261001-00022 được tạo.,2026-09-10 05:00:00
+74,22,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #6.,2026-09-10 05:05:00
+75,22,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-10 05:10:00
+76,16,CREATED,3,Booking LNR-20260915-00016 được tạo.,2026-09-10 07:30:00
+77,16,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #7.,2026-09-10 07:35:00
+78,16,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-10 07:40:00
+79,27,CREATED,3,Booking LNR-20260918-00027 được tạo.,2026-09-10 09:00:00
+80,27,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #5.,2026-09-10 09:05:00
+81,27,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-10 09:10:00
+82,22,RESCHEDULED,3,Đổi lịch sang 2026-10-01 10:00:00.,2026-09-12 11:00:00
+83,23,CREATED,3,Booking LNR-20261006-00023 được tạo.,2026-09-14 09:00:00
+84,23,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #7.,2026-09-14 09:05:00
+85,13,CREATED,3,Booking LNR-20261027-00013 được tạo.,2026-09-14 10:00:00
+86,13,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #6.,2026-09-14 10:05:00
+87,7,CREATED,19,Booking LNR-20260926-00007 được tạo.,2026-09-14 18:00:00
+88,7,STAFF_ASSIGNED,19,Đã phân công kỹ thuật viên #6.,2026-09-14 18:05:00
+89,24,CREATED,16,Booking LNR-20261017-00024 được tạo.,2026-09-14 23:00:00
+90,24,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #6.,2026-09-14 23:05:00
+91,24,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-14 23:10:00
+92,5,CREATED,20,Booking LNR-20261024-00005 được tạo.,2026-09-15 01:00:00
+93,5,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #7.,2026-09-15 01:05:00
+94,5,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-15 01:10:00
+95,6,CREATED,3,Booking LNR-20261028-00006 được tạo.,2026-09-15 02:00:00
+96,6,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #7.,2026-09-15 02:05:00
+97,6,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-15 02:10:00
+98,2,CREATED,3,Booking LNR-20261022-00002 được tạo.,2026-09-15 03:00:00
+99,2,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #4.,2026-09-15 03:05:00
+100,2,EMAIL_SENT,\N,Đã gửi email xác nhận booking.,2026-09-15 03:10:00
+101,20,CREATED,3,Booking LNR-20261014-00020 được tạo.,2026-09-15 06:00:00
+102,20,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #7.,2026-09-15 06:05:00
+103,12,CHECKED_IN,3,Khách đã check-in tại spa.,2026-09-15 08:56:00
+104,12,SERVICE_STARTED,4,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-09-15 09:22:00
+105,10,CREATED,9,Booking LNR-20261017-00010 được tạo.,2026-09-15 10:00:00
+106,21,CREATED,18,Booking LNR-20260926-00021 được tạo.,2026-09-15 10:00:00
+107,10,STAFF_ASSIGNED,9,Đã phân công kỹ thuật viên #5.,2026-09-15 10:05:00
+108,21,STAFF_ASSIGNED,18,Đã phân công kỹ thuật viên #6.,2026-09-15 10:05:00
+109,1,CHECKED_IN,3,Khách đã check-in tại spa.,2026-09-15 11:11:00
+110,16,CHECKED_IN,3,Khách đã check-in tại spa.,2026-09-15 11:31:00
+111,1,SERVICE_STARTED,4,Kỹ thuật viên bắt đầu thực hiện dịch vụ.,2026-09-15 11:36:00
+112,4,CREATED,3,Booking LNR-20261008-00004 được tạo.,2026-09-15 12:00:00
+113,19,CREATED,3,Booking LNR-20261009-00019 được tạo.,2026-09-15 12:00:00
+114,4,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #5.,2026-09-15 12:05:00
+115,19,STAFF_ASSIGNED,\N,Đã phân công kỹ thuật viên #5.,2026-09-15 12:05:00
+116,14,CREATED,3,Booking LNR-20261019-00014 được tạo.,2026-09-15 13:00:00
+117,14,PAYMENT_RECEIVED,\N,Thanh toán PAY-20261019-00014 thành công.,2026-09-15 13:00:00
+118,14,STAFF_ASSIGNED,3,Đã phân công kỹ thuật viên #6.,2026-09-15 13:05:00
+119,18,CHECKED_IN,3,Khách đã check-in tại spa.,2026-09-15 13:11:00
+120,4,PAYMENT_RECEIVED,\N,Thanh toán PAY-20261008-00004 thành công.,2026-09-15 14:20:00

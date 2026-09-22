@@ -1,4 +1,4 @@
-# Stack local: MySQL + Redis + Chroma + Spring Boot backend + React frontend.
+# Stack local: MySQL + Redis + Kafka + Chroma + Spring Boot backend + React frontend.
 #
 # Quy tắc DB: database/Web_DataBase_USTH.sql là template cố định chỉ DDL,
 # một DB lunara_spa duy nhất cho mọi service. Data do code nạp qua
@@ -7,14 +7,17 @@
 # từ host bằng make seed-demo / seed-test, không mount vào entrypoint
 # để tránh nạp nhầm Production mỗi lần khởi động.
 #
+# Kafka là phụ thuộc của realtime/SSE: backend publish event sau commit,
+# consumer đẩy SSE và gửi email. Host debug qua localhost:9094.
+#
 # Chạy từ thư mục gốc:
 #   cp templates/.env.example templates/.env
 #   docker compose -f templates/docker-compose.yml up
 #
-# Mặc định chỉ khởi động DB template và Redis, chưa có data.
+# Mặc định khởi động DB template, Redis và Kafka, chưa có data.
 # VITE_API_URL chốt lúc build frontend, đổi giá trị thì build lại.
 # Chạy full stack:
-#   docker compose -f templates/docker-compose.yml --profile app --profile chroma up --build
+#   docker compose -f templates/docker-compose.yml --profile app up --build
 
 name: lunara-spa
 
@@ -27,6 +30,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-lunara_spa}
       MYSQL_USER: ${MYSQL_USER:-lunara}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?thiếu trong .env}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:
@@ -66,6 +70,36 @@ services:
       retries: 20
     restart: unless-stopped
 
+  kafka:
+    image: apache/kafka:3.9.1
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+      - "${KAFKA_EXTERNAL_PORT:-9094}:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9094}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
   backend:
     profiles: ["app"]
     build:
@@ -81,6 +115,7 @@ services:
       start_period: 60s
     env_file: .env
     environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://db:3306/lunara_spa?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-lunara}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?thiếu trong .env}
@@ -93,12 +128,16 @@ services:
       CHROMA_URL: http://chroma:8000
       CHROMA_ENABLED: ${CHROMA_ENABLED:-false}
       CHROMA_STARTUP_INDEXING: ${CHROMA_STARTUP_INDEXING:-false}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-lunara-api}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
       chroma:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
 
@@ -119,3 +158,4 @@ services:
 volumes:
   db_data:
   chroma_data:
+  kafka_data:

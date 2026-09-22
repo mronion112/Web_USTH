@@ -1,6 +1,6 @@
 # Lunara Spa Mock Database
 
-Bộ mock data này bám theo schema `lunara_spa` gồm đúng 15 table:
+Bộ mock data này cung cấp CSV cho 15 bảng nghiệp vụ. Schema runtime có thêm bảng vận hành `sepay_transactions` (không cần seed CSV) để lưu webhook và dấu vết đối soát:
 
 1. roles
 2. permissions
@@ -17,6 +17,7 @@ Bộ mock data này bám theo schema `lunara_spa` gồm đúng 15 table:
 13. booking_events
 14. payments
 15. feedback
+16. sepay_transactions (runtime/Flyway, để trống sau khi seed)
 
 ## Folder
 

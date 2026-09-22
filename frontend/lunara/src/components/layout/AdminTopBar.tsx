@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
-import { Search, Bell, Clock, ExternalLink, Shield } from 'lucide-react';
+import { Search, Bell, Clock, ExternalLink, Shield, MessageSquare } from 'lucide-react';
+import { notificationsApi, ApiNotification } from '@/lib/api';
+import { useRefresh } from '@/lib/use-refresh';
+import { useAdminChat } from '@/contexts/AdminChatContext';
 
 interface NotificationItem {
   id: string;
-  type: 'booking' | 'payment' | 'reschedule' | 'checkin' | 'staff';
+  type: string;
   title: string;
   description: string;
   time: string;
@@ -14,81 +17,94 @@ interface NotificationItem {
   link?: string;
 }
 
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    type: 'booking',
-    title: 'Lịch hẹn mới #LNR-092',
-    description: 'Khách hàng Hoàng Kim Ngân đã đặt Massage Thư Giãn (16:30 hôm nay)',
-    time: '5 phút trước',
-    read: false,
-    link: '/admin/live',
-  },
-  {
-    id: 'notif-2',
-    type: 'payment',
-    title: 'Thanh toán VietQR thành công',
-    description: 'Nhận 450.000 đ từ Nguyễn Văn An cho mã đặt lịch #LNR-001',
-    time: '18 phút trước',
-    read: false,
-    link: '/admin/payment',
-  },
-  {
-    id: 'notif-3',
-    type: 'reschedule',
-    title: 'Yêu cầu dời lịch hẹn',
-    description: 'Lê Minh Châu (#LNR-003) đề nghị dời sang 17:00 ngày mai',
-    time: '42 phút trước',
-    read: false,
-    link: '/admin/booking',
-  },
-  {
-    id: 'notif-4',
-    type: 'staff',
-    title: 'KTV vào ca trực',
-    description: 'Kỹ thuật viên Linh Nguyễn đã điểm danh vào ca làm việc chiều',
-    time: '1 giờ trước',
-    read: true,
-    link: '/admin/staff',
-  },
-  {
-    id: 'notif-5',
-    type: 'checkin',
-    title: 'Khách đến Spa',
-    description: 'Khách hàng Trần Thị Bích (#LNR-002) đã có mặt tại sảnh chờ',
-    time: '2 giờ trước',
-    read: true,
-    link: '/admin/live',
-  },
-  {
-    id: 'notif-6',
-    type: 'payment',
-    title: 'Thanh toán VietQR thành công',
-    description: 'Nhận 1.200.000 đ từ gói VIP Thư Thái Toàn Thân (#LNR-005)',
-    time: '3 giờ trước',
-    read: true,
-    link: '/admin/payment',
-  },
-  {
-    id: 'notif-7',
-    type: 'booking',
-    title: 'Lịch hẹn sắp tới',
-    description: 'Ca trị liệu đá nóng Himalaya của Phạm Hồng Đức diễn ra sau 30 phút',
-    time: '4 giờ trước',
-    read: true,
-    link: '/admin/calendar',
-  },
-];
-
 export const AdminTopBar: React.FC = () => {
   const { role } = useAuth();
+  const { chatMode, toggleChat, unreadCount: unreadChatCount } = useAdminChat();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [notifOpen, setNotifOpen] = useState(false);
   const [expandAll, setExpandAll] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = React.useRef<HTMLDivElement>(null);
+
+  const formatEventTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const diffMs = Date.now() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'Vừa xong';
+      if (diffMins < 60) return `${diffMins} phút trước`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours} giờ trước`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays} ngày trước`;
+    } catch {
+      return isoString;
+    }
+  };
+
+  const getEventTitle = (eventType: string, bookingCode?: string) => {
+    const code = bookingCode ? ` (#${bookingCode})` : '';
+    switch (eventType) {
+      case 'CREATED':
+        return `Lịch hẹn mới được đặt${code}`;
+      case 'CHECKED_IN':
+        return `Khách đã check-in${code}`;
+      case 'SERVICE_STARTED':
+        return `Bắt đầu ca phục vụ${code}`;
+      case 'COMPLETED':
+        return `Hoàn thành ca trị liệu${code}`;
+      case 'PAYMENT_RECEIVED':
+        return `Thanh toán thành công${code}`;
+      case 'PAYMENT_REFUNDED':
+        return `Đã hoàn tiền${code}`;
+      case 'RESCHEDULED':
+        return `Lịch hẹn đã đổi giờ${code}`;
+      case 'STAFF_ASSIGNED':
+        return `Phân bổ kỹ thuật viên${code}`;
+      default:
+        return `Sự kiện hệ thống${code}`;
+    }
+  };
+
+  const getEventLink = (eventType: string) => {
+    switch (eventType) {
+      case 'PAYMENT_RECEIVED':
+      case 'PAYMENT_REFUNDED':
+        return '/admin/payments';
+      case 'SERVICE_STARTED':
+      case 'CHECKED_IN':
+        return '/admin/live';
+      default:
+        return '/admin/booking';
+    }
+  };
+
+  const loadNotifications = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const list = await notificationsApi.getRecent(expandAll ? 30 : 10, 0, signal);
+      if (Array.isArray(list)) {
+        const mapped: NotificationItem[] = list.map((n: ApiNotification) => ({
+          id: String(n.id),
+          type: n.eventType,
+          title: getEventTitle(n.eventType, n.bookingCode),
+          description: n.message || `Cập nhật trạng thái ${n.eventType}`,
+          time: formatEventTime(n.occurredAt),
+          read: false,
+          link: getEventLink(n.eventType),
+        }));
+        setNotifications((current) => {
+          const readIds = new Set(current.filter((item) => item.read).map((item) => item.id));
+          return mapped.map((item) => ({ ...item, read: readIds.has(item.id) }));
+        });
+      }
+    } catch {
+      // Ignore if offline
+    }
+  }, [expandAll]);
+
+  useRefresh('notification', loadNotifications, ['OWNER', 'MANAGER', 'RECEPTIONIST'].includes(role));
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const displayedNotifications = expandAll ? notifications : notifications.slice(0, 5);
@@ -113,14 +129,14 @@ export const AdminTopBar: React.FC = () => {
       );
     };
     updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    const timer = window.setTimeout(updateTime, 1000);
+    return () => clearTimeout(timer);
+  }, [currentTime]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate('/admin/booking');
+      navigate(`/admin/booking?q=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -151,12 +167,12 @@ export const AdminTopBar: React.FC = () => {
         />
       </form>
 
-      {/* Right Tools: Live Clock, Role Switcher Demo, Notifications, Profile */}
+      {/* Right Tools: Live Clock, Notifications, Profile */}
       <div className="flex items-center gap-4 ml-auto">
         {/* Real-time Clock */}
         <div className="hidden lg:flex items-center gap-2 rounded-full bg-[#F8F9F5] px-3.5 py-1.5 border border-[#E2E8E3] text-xs font-semibold text-[#14271C]">
           <Clock className="h-3.5 w-3.5 text-[#1E3B2B]" />
-          <span>{currentTime || '14:23:08'}</span>
+          <span>{currentTime || '--:--:--'}</span>
         </div>
 
         {/* Server-assigned role */}
@@ -164,6 +180,25 @@ export const AdminTopBar: React.FC = () => {
           <Shield className="h-3.5 w-3.5 text-[#2E7D32]" />
           <span className="text-xs font-semibold text-[#1E3B2B]">{role}</span>
         </div>
+
+        {/* Admin Ops Chat Trigger Button */}
+        <button
+          type="button"
+          onClick={toggleChat}
+          title="Mở thanh trò chuyện điều phối (Ctrl + /)"
+          className={`relative p-2 rounded-full transition-colors cursor-pointer ${
+            chatMode !== 'hidden'
+              ? 'bg-[#1E3B2B] text-white hover:bg-[#14271C]'
+              : 'text-[#526056] hover:bg-[#F8F9F5] hover:text-[#14271C]'
+          }`}
+        >
+          <MessageSquare className="h-5 w-5" />
+          {unreadChatCount > 0 && chatMode === 'hidden' && (
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white shadow-xs leading-none">
+              {unreadChatCount}
+            </span>
+          )}
+        </button>
 
         {/* Notification Bell with Dropdown */}
         <div className="relative" ref={notifRef}>
@@ -207,30 +242,34 @@ export const AdminTopBar: React.FC = () => {
 
               {/* Notification List (offset = 5 or expand all) */}
               <div className="max-h-96 overflow-y-auto divide-y divide-[#E2E8E3]">
-                {displayedNotifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    onClick={() => handleNotificationClick(notif)}
-                    className={`p-3.5 text-xs transition-colors cursor-pointer hover:bg-[#F8F9F5] flex items-start gap-3 ${
-                      !notif.read ? 'bg-[#E8F5E9]/30' : ''
-                    }`}
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${
-                        !notif.read ? 'bg-[#2E7D32]' : 'bg-transparent'
+                {displayedNotifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-[#8EAA97]">Không có thông báo mới</div>
+                ) : (
+                  displayedNotifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      onClick={() => handleNotificationClick(notif)}
+                      className={`p-3.5 text-xs transition-colors cursor-pointer hover:bg-[#F8F9F5] flex items-start gap-3 ${
+                        !notif.read ? 'bg-[#E8F5E9]/30' : ''
                       }`}
-                    />
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-[#14271C]">{notif.title}</span>
-                        <span className="text-[10px] text-[#8EAA97]">{notif.time}</span>
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${
+                          !notif.read ? 'bg-[#2E7D32]' : 'bg-transparent'
+                        }`}
+                      />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-[#14271C]">{notif.title}</span>
+                          <span className="text-[10px] text-[#8EAA97]">{notif.time}</span>
+                        </div>
+                        <p className="text-[11px] text-[#526056] leading-relaxed">
+                          {notif.description}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-[#526056] leading-relaxed">
-                        {notif.description}
-                      </p>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               {/* Dropdown Footer: Toggle Expand All */}

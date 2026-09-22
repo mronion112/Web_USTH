@@ -1,0 +1,60 @@
+server:
+  port: 0
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:lunara_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client
+            client-secret: test-secret
+            scope: email, profile
+  kafka:
+    listener:
+      auto-startup: false
+app:
+  frontend-url: http://localhost:5173
+  mail:
+    enabled: false
+    from: test@lunara.local
+    gmail:
+      client-id: unit-test-gmail-client
+      client-secret: unit-test-gmail-secret
+      refresh-token: unit-test-gmail-refresh-token
+  payment:
+    bank-bin: "970422"
+    bank-account: "0000000001"
+    bank-account-name: LUNARA SPA
+  sepay:
+    hmac-secret: unit-test-sepay-secret
+    account-number: "0000000001"
+    sub-account: SBSEPAYB9J6MQALS3PC
+  jwt:
+    secret: test-secret-key-that-is-at-least-thirty-two-characters
+    access-expiration-ms: 3600000
+    refresh-expiration-ms: 86400000

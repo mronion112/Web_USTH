@@ -1,35 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Radio, Clock, User, CheckCircle, Play, Bell, AlertTriangle } from 'lucide-react';
+import { Clock, User, RefreshCw } from 'lucide-react';
 import { SlidingTabs } from '@/components/transitions/SlidingTabs';
-import { ShimmerText } from '@/components/transitions/ShimmerText';
 import { TiltCard } from '@/components/transitions/TiltCard';
-
-interface ActiveBooking {
-  id: string;
-  timeRange: string;
-  customer: string;
-  service: string;
-  duration: string;
-  staff: string;
-  status: 'IDLE' | 'IN_SERVICE' | 'COMPLETED';
-}
-
-interface UpcomingBookingItem {
-  id: string;
-  time: string;
-  customer: string;
-  service: string;
-  staff: string;
-  status: string;
-}
+import { bookingsApi, ApiBookingSearch } from '@/lib/api';
+import { useRefresh } from '@/lib/use-refresh';
+import { liveBookingsQuery } from '@/lib/admin-booking-query';
 
 export const LivePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [currentTime, setCurrentTime] = useState<string>('');
-  const [showToast, setShowToast] = useState(true);
+  const [bookings, setBookings] = useState<ApiBookingSearch[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Live seconds clock
   useEffect(() => {
@@ -40,102 +23,39 @@ export const LivePage: React.FC = () => {
       );
     };
     updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+    const timer = window.setTimeout(updateTime, 1000);
+    return () => clearTimeout(timer);
+  }, [currentTime]);
+
+  const loadLiveBookings = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await bookingsApi.search(liveBookingsQuery(), signal);
+      if (res && Array.isArray(res.content)) {
+        setBookings([...res.content].sort((left, right) => left.bookingStart.localeCompare(right.bookingStart)));
+      }
+    } catch {
+      // The transport retries on its next cycle.
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const [activeBookings, setActiveBookings] = useState<ActiveBooking[]>([
-    {
-      id: 'LNR-010',
-      timeRange: '14:00 → 15:00',
-      customer: 'Nguyễn Văn An',
-      service: 'Massage Thư Giãn',
-      duration: '60m',
-      staff: 'Linh Nguyễn',
-      status: 'IDLE', // Mặc định không hiển thị trạng thái KTV
-    },
-    {
-      id: 'LNR-011',
-      timeRange: '14:15 → 15:15',
-      customer: 'Phạm Minh Bình',
-      service: 'Trị Liệu Thảo Dược',
-      duration: '60m',
-      staff: 'Hoa Lê',
-      status: 'IN_SERVICE',
-    },
-    {
-      id: 'LNR-012',
-      timeRange: '14:30 → 15:15',
-      customer: 'Trần Thu Châu',
-      service: 'Chăm Sóc Da Mặt',
-      duration: '45m',
-      staff: 'Mai Trần',
-      status: 'IDLE',
-    },
-  ]);
+  useRefresh('booking', loadLiveBookings);
 
-  const [upcomingList] = useState<UpcomingBookingItem[]>([
-    {
-      id: 'LNR-013',
-      time: '15:00',
-      customer: 'Nguyễn Văn An',
-      service: 'Massage Thư Giãn',
-      staff: 'Linh Nguyễn',
-      status: 'Đã xác nhận',
-    },
-    {
-      id: 'LNR-014',
-      time: '15:30',
-      customer: 'Lê Thị Bích',
-      service: 'Chăm Sóc Da Mặt',
-      staff: 'Mai Trần',
-      status: 'Đã xác nhận',
-    },
-    {
-      id: 'LNR-015',
-      time: '16:00',
-      customer: 'Phạm Quốc Cường',
-      service: 'Trị Liệu Toàn Thân',
-      staff: 'Hoa Lê',
-      status: 'Đã xác nhận',
-    },
-    {
-      id: 'LNR-016',
-      time: '16:30',
-      customer: 'Hoàng Kim Ngân',
-      service: 'Đá Nóng Himalaya',
-      staff: 'Vũ Đức Tùng',
-      status: 'Đã xác nhận',
-    },
-  ]);
+  // Counts for tabs
+  const countInService = bookings.filter((b) => b.status === 'IN_SERVICE').length;
+  const countUpcoming = bookings.filter((b) => ['CONFIRMED', 'CHECKED_IN', 'PENDING'].includes(b.status)).length;
+  const countCompleted = bookings.filter((b) => b.status === 'COMPLETED').length;
+  const countAll = bookings.length;
 
-  const handleStartService = (id: string) => {
-    setActiveBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: 'IN_SERVICE' } : b))
-    );
-  };
-
-  const handleCompleteService = (id: string) => {
-    setActiveBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: 'COMPLETED' } : b))
-    );
-  };
-
-  // Dynamic counts for tabs
-  const countInService = activeBookings.filter((b) => b.status === 'IN_SERVICE').length;
-  const countCompleted = activeBookings.filter((b) => b.status === 'COMPLETED').length;
-  const countUpcoming = upcomingList.length;
-  const countAll = activeBookings.length + upcomingList.length;
-
-  // Filtered lists based on activeTab
-  const filteredActiveBookings = activeBookings.filter((b) => {
+  // Filtered list
+  const filteredBookings = bookings.filter((b) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'in_service') return b.status === 'IN_SERVICE';
+    if (activeTab === 'upcoming') return ['CONFIRMED', 'CHECKED_IN', 'PENDING'].includes(b.status);
     if (activeTab === 'completed') return b.status === 'COMPLETED';
-    return false;
+    return true;
   });
-
-  const shouldShowUpcoming = activeTab === 'all' || activeTab === 'upcoming';
 
   return (
     <div className="space-y-8 font-body max-w-7xl mx-auto relative pb-16">
@@ -148,183 +68,130 @@ export const LivePage: React.FC = () => {
             </h1>
             <span className="flex items-center gap-1.5 rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-bold uppercase tracking-wider">
               <span className="h-2 w-2 rounded-full bg-red-600 animate-ping" />
-              <ShimmerText className="font-extrabold text-red-700">LIVE</ShimmerText>
+              LIVE REALTIME
             </span>
           </div>
           <p className="text-xs text-[#6B726C] mt-1">
-            Chủ Nhật · 14 Tháng 9 2026 · Điều phối khách & kỹ thuật viên tức thời
+            Theo dõi trạng thái phòng trị liệu và tiến độ ca trực của kỹ thuật viên
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-[#E2E8E3] text-sm font-mono font-bold text-[#1E3B2B] shadow-2xs">
-            <Clock className="h-4 w-4 text-[#8EAA97]" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 rounded-2xl bg-white border border-[#E2E8E3] px-4 py-2 text-xs font-mono font-semibold text-[#14271C] shadow-xs">
+            <Clock className="h-4 w-4 text-[#1E3B2B]" />
             <span>{currentTime || '14:23:08'}</span>
           </div>
+
+          <Button
+            variant="outline"
+            onClick={() => loadLiveBookings()}
+            className="rounded-xl border-[#D9E5DC] text-xs h-10 px-3 cursor-pointer"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Đồng bộ
+          </Button>
         </div>
       </div>
 
-      {/* Filter Tabs with Dynamic Counts */}
+
+      {/* Filter Tabs with Sliding Pill */}
       <div className="overflow-x-auto pb-1">
         <SlidingTabs
           activeKey={activeTab}
           onChange={setActiveTab}
           tabs={[
             { key: 'all', label: `Tất cả (${countAll})` },
-            { key: 'upcoming', label: `Sắp đến (${countUpcoming})` },
             { key: 'in_service', label: `Đang trị liệu (${countInService})` },
-            { key: 'completed', label: `Hoàn thành (${countCompleted})` },
+            { key: 'upcoming', label: `Lịch hẹn sắp tới (${countUpcoming})` },
+            { key: 'completed', label: `Đã hoàn thành (${countCompleted})` },
           ]}
         />
       </div>
 
-      {/* NOW SECTION: Interactive Active Booking Cards */}
-      {(activeTab === 'all' || activeTab === 'in_service' || activeTab === 'completed') && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-xl font-semibold text-[#14271C]">
-              ĐANG DIỄN RA (NOW)
-            </h2>
-            <span className="text-xs text-[#8EAA97]">
-              {filteredActiveBookings.length} ca tại phòng trị liệu
-            </span>
-          </div>
+      {/* Live Sessions Cards Grid */}
+      {loading ? (
+        <div className="text-center py-16 text-xs text-[#8EAA97]">Đang tải dữ liệu ca trực từ database...</div>
+      ) : filteredBookings.length === 0 ? (
+        <div className="text-center py-16 text-xs text-[#8EAA97]">Không có ca phục vụ nào trong danh mục này</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredBookings.map((booking) => {
+            const isInService = booking.status === 'IN_SERVICE';
+            const isCompleted = booking.status === 'COMPLETED';
+            const bStart = new Date(booking.bookingStart);
+            const bEnd = new Date(booking.bookingEnd);
+            const formatTime = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
-          {filteredActiveBookings.length === 0 ? (
-            <Card className="p-8 text-center text-xs text-[#6B726C]">
-              Không có ca nào trong trạng thái này.
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {filteredActiveBookings.map((booking) => (
-                <TiltCard key={booking.id} maxTilt={6} cardClassName="rounded-2xl">
-                  <Card className="h-full border border-[#E2E8E3] shadow-luxury hover:shadow-luxury-hover transition-all">
-                    <CardContent className="p-6 space-y-4">
+            return (
+              <TiltCard key={booking.id} maxTilt={6} cardClassName="rounded-2xl">
+                <Card
+                  className={`h-full border shadow-luxury flex flex-col justify-between overflow-hidden transition-all ${
+                    isInService
+                      ? 'border-[#1E3B2B] bg-white ring-1 ring-[#1E3B2B]'
+                      : 'border-[#E2E8E3] bg-[#FAFBF9]'
+                  }`}
+                >
+                  <CardContent className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      {/* Top status header */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#1E3B2B] bg-[#E8F5E9] px-2.5 py-1 rounded-lg">
-                          {booking.timeRange}
+                        <span className="font-mono text-xs font-bold text-[#1E3B2B]">
+                          #{booking.bookingCode}
                         </span>
-                        <span className="text-xs font-mono text-[#8EAA97]">#{booking.id}</span>
+
+                        {isInService ? (
+                          <span className="flex items-center gap-1.5 rounded-full bg-[#E8F5E9] text-[#2E7D32] px-2.5 py-0.5 text-[11px] font-bold">
+                            <span className="h-2 w-2 rounded-full bg-[#2E7D32] animate-pulse" />
+                            ĐANG TRỊ LIỆU
+                          </span>
+                        ) : isCompleted ? (
+                          <span className="rounded-full bg-[#E2E8E3] text-[#526056] px-2.5 py-0.5 text-[11px] font-semibold">
+                            HOÀN THÀNH
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-[#FFF3E0] text-[#E65100] px-2.5 py-0.5 text-[11px] font-semibold">
+                            SẮP DIỄN RA
+                          </span>
+                        )}
                       </div>
 
-                      <div>
+                      {/* Time & Customer Info */}
+                      <div className="mt-3 space-y-1">
+                        <div className="flex items-center gap-1 text-xs text-[#8EAA97]">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>
+                            {formatTime(bStart)} → {formatTime(bEnd)}
+                          </span>
+                        </div>
                         <h3 className="font-display font-semibold text-lg text-[#14271C]">
-                          {booking.customer}
+                          {booking.customerName}
                         </h3>
-                        <p className="text-xs text-[#526056] mt-0.5">
-                          {booking.service} · {booking.duration}
-                        </p>
                       </div>
 
-                      <div className="pt-2 border-t border-[#E2E8E3] flex items-center justify-between text-xs">
-                        <span className="text-[#6B726C]">
-                          KTV: <strong className="text-[#14271C]">{booking.staff}</strong>
+                      {/* Staff Assigned */}
+                      <div className="mt-4 pt-3 border-t border-[#E2E8E3] flex items-center justify-between text-xs">
+                        <span className="text-[#8EAA97]">KTV phụ trách:</span>
+                        <span className="font-semibold text-[#14271C] flex items-center gap-1">
+                          <User className="h-3.5 w-3.5 text-[#1E3B2B]" />
+                          {booking.staffName || 'Chưa gán'}
                         </span>
-                        {/* Mặc định không hiển thị badge trạng thái KTV, chỉ hiển thị khi Đang trị liệu hoặc Hoàn thành */}
-                        {booking.status === 'IN_SERVICE' ? (
-                          <Badge variant="default">● ĐANG TRỊ LIỆU</Badge>
-                        ) : booking.status === 'COMPLETED' ? (
-                          <Badge variant="success">✓ HOÀN THÀNH</Badge>
-                        ) : null}
                       </div>
-
-                      {/* Operations Status Buttons */}
-                      <div className="pt-2">
-                        {booking.status === 'IDLE' && (
-                          <Button
-                            onClick={() => handleStartService(booking.id)}
-                            className="w-full h-10 rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs font-semibold"
-                          >
-                            <Play className="h-3.5 w-3.5 mr-1 text-[#C5A880]" />
-                            Bắt đầu phục vụ
-                          </Button>
-                        )}
-
-                        {booking.status === 'IN_SERVICE' && (
-                          <Button
-                            onClick={() => handleCompleteService(booking.id)}
-                            className="w-full h-10 rounded-xl bg-[#2E7D32] text-white hover:bg-[#1b5e20] text-xs font-semibold"
-                          >
-                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                            Hoàn thành liệu trình
-                          </Button>
-                        )}
-
-                        {booking.status === 'COMPLETED' && (
-                          <div className="text-center py-2 text-xs font-medium text-[#2E7D32] bg-[#E8F5E9] rounded-xl">
-                            Ca đã hoàn tất thành công
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TiltCard>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* UPCOMING SECTION: Clean Queue with Auto-assigned KTV */}
-      {shouldShowUpcoming && (
-        <div className="space-y-4 pt-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-xl font-semibold text-[#14271C]">
-              LỊCH HẸN TIẾP THEO (UPCOMING)
-            </h2>
-            <span className="text-xs text-[#8EAA97]">KTV đã được hệ thống tự động gán</span>
-          </div>
-
-          <Card>
-            <CardContent className="p-0">
-              <div className="divide-y divide-[#E2E8E3]">
-                {upcomingList.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 px-6 text-xs gap-3 hover:bg-[#F8F9F5] transition-colors"
-                  >
-                    <div className="flex flex-wrap items-center gap-4">
-                      <span className="font-mono font-bold text-[#1E3B2B] bg-[#E8F5E9] px-2.5 py-1 rounded-lg">
-                        {item.time}
-                      </span>
-                      <span className="font-semibold text-[#14271C]">{item.customer}</span>
-                      <span className="text-[#526056]">{item.service}</span>
-                      <span className="text-[#1E3B2B] bg-[#F8F9F5] px-2.5 py-0.5 rounded-full border border-[#E2E8E3] font-medium">
-                        KTV: {item.staff}
-                      </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Badge variant="secondary">
-                        {item.status}
-                      </Badge>
+
+                    {/* Live is observational; therapists update service tasks in their portal. */}
+                    <div className="pt-2">
+                      {!isCompleted && <div className="w-full py-2 text-center text-xs font-semibold text-[#526056] bg-[#F8F9F5] rounded-xl">Theo dõi trạng thái: {booking.status}</div>}
+
+                      {isCompleted && (
+                        <div className="w-full py-2 text-center text-xs font-semibold text-[#2E7D32] bg-[#E8F5E9] rounded-xl">
+                          ✓ Ca phục vụ đã hoàn tất
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Live Toast Floating Pill */}
-      {showToast && (
-        <div className="fixed bottom-8 right-8 z-40 flex items-center justify-between gap-4 rounded-2xl bg-[#14271C] text-white p-4 shadow-2xl border border-[#C5A880]/30 animate-in slide-in-from-bottom duration-300">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-[#C5A880]/20 flex items-center justify-center text-[#C5A880]">
-              <Bell className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-white">Vừa nhận lịch hẹn mới!</p>
-              <p className="text-[11px] text-[#D9E5DC]">Mã vé #LNR-092 · Giờ hẹn 16:30 hôm nay</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setShowToast(false)}
-            className="text-xs text-[#8EAA97] hover:text-white underline cursor-pointer"
-          >
-            Đóng
-          </button>
+                  </CardContent>
+                </Card>
+              </TiltCard>
+            );
+          })}
         </div>
       )}
     </div>

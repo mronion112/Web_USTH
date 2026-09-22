@@ -301,6 +301,36 @@ Table payments {
   }
 }
 
+Table sepay_transactions {
+  id bigint [pk, increment]
+  sepay_id bigint [not null, unique]
+  gateway varchar(50) [not null]
+  transaction_date datetime
+  account_number varchar(100)
+  sub_account varchar(100)
+  payment_code varchar(100)
+  content varchar(500)
+  transfer_type varchar(10) [not null]
+  transfer_amount decimal(15,2) [not null]
+  accumulated decimal(15,2)
+  reference_code varchar(150)
+  raw_payload text [not null]
+  matched_payment_id bigint [unique]
+  status varchar(30) [not null]
+  review_reason varchar(500)
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (status, created_at)
+    payment_code
+  }
+
+  checks {
+    `transfer_amount > 0` [name: 'chk_sepay_transactions_amount']
+  }
+}
+
 Table feedback {
   id bigint [pk, increment]
   booking_id bigint [not null, unique]
@@ -336,5 +366,5 @@ Ref fk_booking_items_service: booking_items.service_id > services.id [delete: re
 Ref fk_booking_events_booking: booking_events.booking_id > bookings.id [delete: cascade, update: cascade]
 Ref fk_booking_events_actor: booking_events.actor_account_id > accounts.id [delete: set null, update: cascade]
 Ref fk_payments_booking: bookings.id - payments.booking_id [delete: restrict, update: cascade]
+Ref fk_sepay_transactions_payment: sepay_transactions.matched_payment_id > payments.id [delete: set null, update: cascade]
 Ref fk_feedback_booking: bookings.id - feedback.booking_id [delete: cascade, update: cascade]
-

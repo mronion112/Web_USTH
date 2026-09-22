@@ -1,28 +1,21 @@
 package com.kevin.lunaraspa.booking.service.impl;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.kevin.lunaraspa.authentication_account.entity.Account;
 import com.kevin.lunaraspa.authentication_account.repository.AccountRepository;
+import com.kevin.lunaraspa.authentication_account.repository.RoleRepository;
 import com.kevin.lunaraspa.booking.dto.AssignStaffRequest;
 import com.kevin.lunaraspa.booking.dto.AssignStaffResponse;
 import com.kevin.lunaraspa.booking.dto.BookingDetailResponse;
 import com.kevin.lunaraspa.booking.dto.BookingItemRequest;
 import com.kevin.lunaraspa.booking.dto.BookingItemResponse;
 import com.kevin.lunaraspa.booking.dto.BookingSummaryResponse;
+import com.kevin.lunaraspa.booking.dto.BookingSearchResponse;
+import com.kevin.lunaraspa.booking.dto.BookingSortField;
+import com.kevin.lunaraspa.booking.dto.CheckInResponse;
+import com.kevin.lunaraspa.booking.dto.EmailDispatchResponse;
+import com.kevin.lunaraspa.booking.dto.RescheduleBookingRequest;
+import com.kevin.lunaraspa.booking.dto.RescheduleBookingResponse;
+import com.kevin.lunaraspa.booking.dto.ManagerCreateBookingRequest;
 import com.kevin.lunaraspa.booking.dto.CreateBookingRequest;
 import com.kevin.lunaraspa.booking.dto.CreateBookingResponse;
 import com.kevin.lunaraspa.booking.dto.StaffSummaryResponse;
@@ -36,9 +29,29 @@ import com.kevin.lunaraspa.booking.repository.BookingRepository;
 import com.kevin.lunaraspa.booking.repository.ServiceSnapshotProjection;
 import com.kevin.lunaraspa.booking.service.BookingService;
 import com.kevin.lunaraspa.core.exception.AppException;
+import com.kevin.lunaraspa.core.common.model.response.PageableResponse;
 import com.kevin.lunaraspa.profiles.entity.CustomerProfile;
-
+import com.kevin.lunaraspa.profiles.repository.CustomerProfileRepository;
+import com.kevin.lunaraspa.realtime.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -51,6 +64,9 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final AccountRepository accountRepository;
+    private final RoleRepository roleRepository;
+    private final CustomerProfileRepository customerProfileRepository;
+    private final RealtimeEventPublisher realtimeEventPublisher;
 
     @Override
     @Transactional
@@ -62,6 +78,56 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED);
         }
 
+        return persistBooking(request, customer, customer.getId());
+    }
+
+    @Override
+    @Transactional
+    public CreateBookingResponse createManagerBooking(ManagerCreateBookingRequest request, String currentUserEmail) {
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        if (request == null || normalizeText(request.getCustomerName()) == null
+                || normalizeText(request.getCustomerPhone()) == null) {
+            throw new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED,
+                    "Customer name and phone are required");
+        }
+        CreateBookingRequest bookingRequest = CreateBookingRequest.builder()
+                .bookingStart(request.getBookingStart()).staffAccountId(request.getStaffAccountId())
+                .customerNote(request.getCustomerNote()).items(request.getItems()).build();
+        validateCreateRequest(bookingRequest);
+        Account customer = findOrCreateCustomer(request, actor);
+        return persistBooking(bookingRequest, customer, actor.getId());
+    }
+
+    private Account findOrCreateCustomer(ManagerCreateBookingRequest request, Account actor) {
+        String email = normalizeText(request.getCustomerEmail());
+        String phone = normalizeText(request.getCustomerPhone());
+        Account customer = email == null ? null : accountRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (customer == null) {
+            customer = customerProfileRepository.findFirstByPhone(phone).map(CustomerProfile::getAccount).orElse(null);
+        }
+        if (customer != null) {
+            if (customer.getCustomerProfile() == null) {
+                throw new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED,
+                        "The matched account is not a customer");
+            }
+            return customer;
+        }
+        var customerRole = roleRepository.findByCodeIgnoreCase("CUSTOMER")
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.CUSTOMER_ACCOUNT_REQUIRED));
+        String resolvedEmail = email != null ? email
+                : "walkin-" + UUID.randomUUID().toString().substring(0, 12) + "@local.lunara";
+        customer = Account.builder().email(resolvedEmail).displayName(request.getCustomerName().trim())
+                .role(customerRole).isActive(true).provisionedByAccount(actor).build();
+        accountRepository.saveAndFlush(customer);
+        CustomerProfile profile = CustomerProfile.builder().account(customer).phone(phone).build();
+        customerProfileRepository.saveAndFlush(profile);
+        customer.setCustomerProfile(profile);
+        return customer;
+    }
+
+    private CreateBookingResponse persistBooking(CreateBookingRequest request, Account customer, Long creatorId) {
+        CustomerProfile customerProfile = customer.getCustomerProfile();
         List<PricedItem> pricedItems = priceItems(request.getItems());
         int totalDuration = pricedItems.stream()
                 .mapToInt(item -> item.request().getDurationMinutes())
@@ -70,6 +136,10 @@ public class BookingServiceImpl implements BookingService {
                 .map(PricedItem::lineAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         LocalDateTime bookingEnd = request.getBookingStart().plusMinutes(totalDuration);
+        int preparationMinutes = pricedItems.stream()
+                .mapToInt(item -> defaultZero(item.service().getPreparationBufferMinutes())).sum();
+        int cleanupMinutes = pricedItems.stream()
+                .mapToInt(item -> defaultZero(item.service().getCleanupBufferMinutes())).sum();
         Set<Long> serviceIds = collectServiceIds(request.getItems());
 
         AssignmentSource assignmentSource = request.getStaffAccountId() == null
@@ -78,8 +148,8 @@ public class BookingServiceImpl implements BookingService {
         Long staffAccountId = selectAndLockStaff(
                 request.getStaffAccountId(),
                 serviceIds,
-                request.getBookingStart(),
-                bookingEnd,
+                request.getBookingStart().minusMinutes(preparationMinutes),
+                bookingEnd.plusMinutes(cleanupMinutes),
                 null
         );
 
@@ -97,7 +167,7 @@ public class BookingServiceImpl implements BookingService {
                 .customerNote(normalizeText(request.getCustomerNote()))
                 .totalDurationMinutes(totalDuration)
                 .totalAmount(totalAmount)
-                .createdByAccountId(customer.getId())
+                .createdByAccountId(creatorId)
                 .build();
 
         pricedItems.forEach(pricedItem -> booking.addItem(toEntity(pricedItem)));
@@ -107,15 +177,16 @@ public class BookingServiceImpl implements BookingService {
         booking.setBookingCode(bookingCode);
         booking.addEvent(buildEvent(
                 "CREATED",
-                customer.getId(),
+                creatorId,
                 "Booking " + bookingCode + " was created."
         ));
         booking.addEvent(buildEvent(
                 "STAFF_ASSIGNED",
-                customer.getId(),
+                creatorId,
                 "Assigned staff account #" + staffAccountId + "."
         ));
         bookingRepository.saveAndFlush(booking);
+        realtimeEventPublisher.bookingChanged(booking, "CREATED");
 
         return toCreateResponse(booking);
     }
@@ -182,11 +253,20 @@ public class BookingServiceImpl implements BookingService {
         Set<Long> serviceIds = booking.getItems().stream()
                 .map(BookingItem::getServiceId)
                 .collect(java.util.stream.Collectors.toSet());
+        Map<Long, ServiceSnapshotProjection> serviceSnapshots = bookingRepository.findActiveServicesByIds(serviceIds)
+                .stream().collect(java.util.stream.Collectors.toMap(ServiceSnapshotProjection::getId, item -> item));
+        if (serviceSnapshots.size() != serviceIds.size()) {
+            throw new AppException(BookingFeatureErrorCode.SERVICE_NOT_FOUND);
+        }
+        int preparationMinutes = serviceSnapshots.values().stream()
+                .mapToInt(item -> defaultZero(item.getPreparationBufferMinutes())).sum();
+        int cleanupMinutes = serviceSnapshots.values().stream()
+                .mapToInt(item -> defaultZero(item.getCleanupBufferMinutes())).sum();
         Long staffAccountId = selectAndLockStaff(
                 request.getStaffAccountId(),
                 serviceIds,
-                booking.getBookingStart(),
-                booking.getBookingEnd(),
+                booking.getBookingStart().minusMinutes(preparationMinutes),
+                booking.getBookingEnd().plusMinutes(cleanupMinutes),
                 booking.getId()
         );
 
@@ -198,12 +278,149 @@ public class BookingServiceImpl implements BookingService {
                 "Assigned staff account #" + staffAccountId + " by manager."
         ));
         bookingRepository.saveAndFlush(booking);
+        realtimeEventPublisher.bookingChanged(booking, "STAFF_ASSIGNED");
 
         return AssignStaffResponse.builder()
                 .bookingId(booking.getId())
                 .staffAccountId(staffAccountId)
                 .assignmentSource(booking.getAssignmentSource().name())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageableResponse<BookingSearchResponse> searchBookings(LocalDateTime from, LocalDateTime to,
+            BookingStatus status, Long staffId, Boolean unassigned, String code, int page, int size,
+            BookingSortField sortBy, Sort.Direction sortDirection, String currentUserEmail) {
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        if (page < 0 || size < 1 || size > 100 || (from != null && to != null
+                && (!from.isBefore(to) || to.isAfter(from.plusDays(93))))) {
+            throw new AppException(BookingFeatureErrorCode.INVALID_BOOKING_START, "Invalid pagination or date range");
+        }
+        if (staffId != null && staffId <= 0) throw new AppException(BookingFeatureErrorCode.INVALID_STAFF_ID);
+        Specification<Booking> specification = (root, query, cb) -> cb.conjunction();
+        if (from != null) specification = specification.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("bookingStart"), from));
+        if (to != null) specification = specification.and((root, query, cb) -> cb.lessThan(root.get("bookingStart"), to));
+        if (status != null) specification = specification.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        if (staffId != null) specification = specification.and((root, query, cb) -> cb.equal(root.get("staffAccountId"), staffId));
+        if (Boolean.TRUE.equals(unassigned)) specification = specification.and((root, query, cb) -> cb.isNull(root.get("staffAccountId")));
+        if (code != null && !code.isBlank()) {
+            String pattern = "%" + code.trim().toLowerCase(Locale.ROOT) + "%";
+            specification = specification.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("bookingCode")), pattern),
+                    cb.like(cb.lower(root.get("customerNameSnapshot")), pattern)));
+        }
+        BookingSortField safeSortBy = sortBy == null ? BookingSortField.BOOKING_START : sortBy;
+        Sort.Direction safeDirection = sortDirection == null ? Sort.Direction.DESC : sortDirection;
+        Sort sort = Sort.by(safeDirection, safeSortBy.property()).and(Sort.by(safeDirection, "id"));
+        var result = bookingRepository.findAll(specification, PageRequest.of(page, size, sort));
+        var content = result.getContent().stream().map(this::toSearchResponse).toList();
+        return PageableResponse.<BookingSearchResponse>builder().content(content).pageNumber(result.getNumber())
+                .pageSize(result.getSize()).totalPages(result.getTotalPages()).totalElements(result.getTotalElements())
+                .numberOfElements(result.getNumberOfElements()).build();
+    }
+
+    @Override
+    @Transactional
+    public CheckInResponse checkIn(Long bookingId, String currentUserEmail) {
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        if (booking.getStatus() == BookingStatus.CHECKED_IN) {
+            return CheckInResponse.builder().bookingId(booking.getId()).status(booking.getStatus().name())
+                    .checkedInAt(booking.getCheckedInAt()).build();
+        }
+        if (booking.getStatus() != BookingStatus.CONFIRMED)
+            throw new AppException(BookingFeatureErrorCode.INVALID_STATUS_TRANSITION);
+        LocalDateTime now = LocalDateTime.now();
+        booking.setStatus(BookingStatus.CHECKED_IN);
+        booking.setCheckedInAt(now);
+        booking.addEvent(buildEvent("CHECKED_IN", actor.getId(), "Customer checked in."));
+        bookingRepository.saveAndFlush(booking);
+        realtimeEventPublisher.bookingChanged(booking, "CHECKED_IN");
+        return CheckInResponse.builder().bookingId(booking.getId()).status(booking.getStatus().name())
+                .checkedInAt(now).build();
+    }
+
+    @Override
+    @Transactional
+    public RescheduleBookingResponse reschedule(String bookingCode, RescheduleBookingRequest request,
+                                                String currentUserEmail) {
+        validateRescheduleRequest(request);
+        Account customer = getActiveAccount(currentUserEmail);
+        Booking booking = bookingRepository.findByBookingCodeForUpdateWithItems(bookingCode)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        if (!customer.getId().equals(booking.getCustomerAccountId()))
+            throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        return applyReschedule(booking, request, customer.getId(), AssignmentSource.CUSTOMER);
+    }
+
+    @Override
+    @Transactional
+    public RescheduleBookingResponse rescheduleByManager(Long bookingId, RescheduleBookingRequest request,
+                                                         String currentUserEmail) {
+        validateRescheduleRequest(request);
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        Booking booking = bookingRepository.findByIdForUpdateWithItems(bookingId)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        return applyReschedule(booking, request, actor.getId(), AssignmentSource.ADMIN);
+    }
+
+    @Override
+    @Transactional
+    public EmailDispatchResponse resendBookingEmail(Long bookingId, String currentUserEmail) {
+        Account actor = getActiveAccount(currentUserEmail);
+        if (!isManagementRole(actor)) throw new AppException(BookingFeatureErrorCode.ACCESS_DENIED);
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
+        if (normalizeText(booking.getCustomerEmailSnapshot()) == null
+                || booking.getCustomerEmailSnapshot().endsWith("@local.lunara")) {
+            throw new AppException(BookingFeatureErrorCode.BOOKING_EMAIL_UNAVAILABLE);
+        }
+        realtimeEventPublisher.bookingEmailRequested(booking);
+        return EmailDispatchResponse.builder().bookingId(booking.getId()).bookingCode(booking.getBookingCode())
+                .status("QUEUED").build();
+    }
+
+    private void validateRescheduleRequest(RescheduleBookingRequest request) {
+        if (request == null || request.getBookingStart() == null
+                || !request.getBookingStart().isAfter(LocalDateTime.now()))
+            throw new AppException(BookingFeatureErrorCode.INVALID_BOOKING_START);
+        if (request.getStaffAccountId() != null && request.getStaffAccountId() <= 0)
+            throw new AppException(BookingFeatureErrorCode.INVALID_STAFF_ID);
+    }
+
+    private RescheduleBookingResponse applyReschedule(Booking booking, RescheduleBookingRequest request,
+                                                      Long actorAccountId, AssignmentSource explicitSource) {
+        if (booking.getStatus() == BookingStatus.CHECKED_IN || booking.getStatus() == BookingStatus.IN_SERVICE
+                || booking.getStatus() == BookingStatus.COMPLETED)
+            throw new AppException(BookingFeatureErrorCode.INVALID_STATUS_TRANSITION);
+        Set<Long> serviceIds = booking.getItems().stream().map(BookingItem::getServiceId).collect(java.util.stream.Collectors.toSet());
+        Map<Long, ServiceSnapshotProjection> snapshots = bookingRepository.findActiveServicesByIds(serviceIds)
+                .stream().collect(java.util.stream.Collectors.toMap(ServiceSnapshotProjection::getId, item -> item));
+        if (snapshots.size() != serviceIds.size()) throw new AppException(BookingFeatureErrorCode.SERVICE_NOT_FOUND);
+        LocalDateTime newEnd = request.getBookingStart().plusMinutes(booking.getTotalDurationMinutes());
+        Long previousStaff = booking.getStaffAccountId();
+        Long requestedStaff = request.getStaffAccountId() == null ? previousStaff : request.getStaffAccountId();
+        if (request.getBookingStart().equals(booking.getBookingStart())
+                && Objects.equals(requestedStaff, booking.getStaffAccountId())) return toRescheduleResponse(booking);
+        int prep = snapshots.values().stream().mapToInt(item -> defaultZero(item.getPreparationBufferMinutes())).sum();
+        int cleanup = snapshots.values().stream().mapToInt(item -> defaultZero(item.getCleanupBufferMinutes())).sum();
+        Long selectedStaff = selectAndLockStaff(requestedStaff, serviceIds,
+                request.getBookingStart().minusMinutes(prep), newEnd.plusMinutes(cleanup), booking.getId());
+        booking.setBookingStart(request.getBookingStart());
+        booking.setBookingEnd(newEnd);
+        booking.setStaffAccountId(selectedStaff);
+        if (request.getStaffAccountId() != null) booking.setAssignmentSource(explicitSource);
+        else if (previousStaff == null) booking.setAssignmentSource(AssignmentSource.SYSTEM);
+        booking.addEvent(buildEvent("RESCHEDULED", actorAccountId,
+                "Booking rescheduled to " + request.getBookingStart() + "."));
+        Booking saved = bookingRepository.saveAndFlush(booking);
+        realtimeEventPublisher.bookingChanged(saved, "RESCHEDULED");
+        return toRescheduleResponse(saved);
     }
 
     private void validateCreateRequest(CreateBookingRequest request) {
@@ -417,6 +634,10 @@ public class BookingServiceImpl implements BookingService {
         return normalized.isEmpty() ? null : normalized;
     }
 
+    private int defaultZero(Integer value) {
+        return value == null ? 0 : value;
+    }
+
     private CreateBookingResponse toCreateResponse(Booking booking) {
         return CreateBookingResponse.builder()
                 .id(booking.getId())
@@ -443,6 +664,22 @@ public class BookingServiceImpl implements BookingService {
                 .build();
     }
 
+    private BookingSearchResponse toSearchResponse(Booking booking) {
+        return BookingSearchResponse.builder().id(booking.getId()).bookingCode(booking.getBookingCode())
+                .status(booking.getStatus().name()).customerAccountId(booking.getCustomerAccountId())
+                .customerName(booking.getCustomerNameSnapshot()).staffAccountId(booking.getStaffAccountId())
+                .staffName(booking.getStaffAccountId() == null ? null
+                        : bookingRepository.findAccountDisplayName(booking.getStaffAccountId()).orElse(null))
+                .bookingStart(booking.getBookingStart()).bookingEnd(booking.getBookingEnd())
+                .totalAmount(booking.getTotalAmount()).build();
+    }
+
+    private RescheduleBookingResponse toRescheduleResponse(Booking booking) {
+        return RescheduleBookingResponse.builder().bookingId(booking.getId()).bookingCode(booking.getBookingCode())
+                .staffAccountId(booking.getStaffAccountId()).bookingStart(booking.getBookingStart())
+                .bookingEnd(booking.getBookingEnd()).build();
+    }
+
     private BookingDetailResponse toDetailResponse(Booking booking) {
         StaffSummaryResponse staff = null;
         if (booking.getStaffAccountId() != null) {
@@ -451,6 +688,7 @@ public class BookingServiceImpl implements BookingService {
                     .displayName(bookingRepository.findAccountDisplayName(booking.getStaffAccountId()).orElse(null))
                     .build();
         }
+        LocalDateTime holdExpiresAt = booking.getCreatedAt() != null ? booking.getCreatedAt().plusMinutes(15) : null;
         return BookingDetailResponse.builder()
                 .id(booking.getId())
                 .bookingCode(booking.getBookingCode())
@@ -458,6 +696,10 @@ public class BookingServiceImpl implements BookingService {
                 .customerName(booking.getCustomerNameSnapshot())
                 .customerEmail(booking.getCustomerEmailSnapshot())
                 .staff(staff)
+                .bookingStart(booking.getBookingStart())
+                .bookingEnd(booking.getBookingEnd())
+                .totalDurationMinutes(booking.getTotalDurationMinutes())
+                .holdExpiresAt(holdExpiresAt)
                 .items(booking.getItems().stream().map(this::toItemResponse).toList())
                 .totalAmount(booking.getTotalAmount())
                 .build();

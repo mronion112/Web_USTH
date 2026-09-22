@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body style="margin:0;background:#f4f1ea;font-family:Arial,Helvetica,sans-serif;color:#14271c">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1ea;padding:32px 12px">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px">
+      <tr><td align="center" style="padding:0 0 24px;font-family:Georgia,serif;font-size:30px;font-weight:700;letter-spacing:2px">Lunara</td></tr>
+      <tr><td style="overflow:hidden;border:1px solid #d9e5dc;border-radius:24px;background:#ffffff">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <tr><td align="center" style="background:#14271c;padding:38px 28px;color:#ffffff">
+            <div th:text="${headline}" style="font-family:Georgia,serif;font-size:28px;font-weight:700">Đặt lịch thành công</div>
+            <div style="margin-top:10px;color:#d9e5dc;font-size:14px">Xin cảm ơn bạn đã lựa chọn Lunara</div>
+          </td></tr>
+          <tr><td style="padding:32px 34px 24px;font-size:15px;line-height:1.7">
+            <p style="margin:0 0 12px">Xin chào <strong th:text="${name}">Nguyễn Văn A</strong>,</p>
+            <p style="margin:0">Lịch hẹn của bạn đã được xác nhận. Chúng tôi rất mong được đón tiếp bạn tại Lunara.</p>
+            <p style="margin:14px 0 0;color:#526056">Thời gian: <strong th:text="${start}" style="color:#14271c">09:00, 20/09/2026</strong></p>
+          </td></tr>
+          <tr><td style="border-top:1px solid #e2e8e3;padding:28px 34px">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="font-family:Georgia,serif;font-size:20px;font-weight:700">Thông tin thanh toán</td>
+                <td align="right" style="font-size:12px;color:#718276">Mã vé:<br><strong th:text="${code}" style="color:#14271c;font-size:15px">ABC12345</strong></td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px">
+              <tr th:each="item : ${items}">
+                <td colspan="2" style="padding:0 0 10px">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e2e8e3;border-radius:14px;background:#fafbf9;padding:14px 16px">
+                    <tr>
+                      <td th:text="${item.serviceNameSnapshot}" style="font-weight:700">Massage thư giãn</td>
+                      <td align="right" th:text="${#numbers.formatDecimal(item.lineAmount, 0, 'COMMA', 0, 'POINT')} + ' đ'" style="font-weight:700">450.000 đ</td>
+                    </tr>
+                    <tr><td colspan="2" th:text="|Thời gian: ${item.durationMinutes} phút|" style="padding-top:6px;color:#718276;font-size:12px">Thời gian: 60 phút</td></tr>
+                  </table>
+                </td>
+              </tr>
+              <tr><td style="padding-top:10px;font-weight:700">Tổng tiền</td><td align="right" th:text="${#numbers.formatDecimal(totalAmount, 0, 'COMMA', 0, 'POINT')} + ' đ'" style="padding-top:10px;font-size:18px;font-weight:700">900.000 đ</td></tr>
+              <tr><td style="padding-top:12px;color:#526056">Trạng thái</td><td align="right" th:text="${paymentStatus}" style="padding-top:12px;color:#2e7d32;font-weight:700">Đã thanh toán</td></tr>
+            </table>
+          </td></tr>
+          <tr><td align="center" style="border-top:1px solid #e2e8e3;padding:30px 34px">
+            <a th:href="${ticketUrl}" style="display:inline-block;border-radius:999px;background:#1e3b2b;padding:13px 28px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700">Xem vé của bạn</a>
+            <div style="margin-top:18px;color:#718276;font-size:12px">Tệp lịch (.ics) được đính kèm để thêm vào Calendar.</div>
+          </td></tr>
+        </table>
+      </td></tr>
+      <tr><td align="center" style="padding:20px;color:#8eaa97;font-size:11px">Lunara Spa · Một khoảng lặng dành riêng cho bạn</td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

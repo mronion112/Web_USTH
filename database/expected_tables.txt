@@ -12,4 +12,5 @@ bookings
 booking_items
 booking_events
 payments
+sepay_transactions
 feedback

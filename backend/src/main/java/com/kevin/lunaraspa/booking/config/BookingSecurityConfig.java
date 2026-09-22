@@ -1,6 +1,7 @@
 package com.kevin.lunaraspa.booking.config;
 
 import com.kevin.lunaraspa.authentication_account.security.JwtAuthenticationFilter;
+import com.kevin.lunaraspa.authentication_account.security.SecurityErrorWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,13 +24,15 @@ public class BookingSecurityConfig {
     @Order(2)
     public SecurityFilterChain bookingSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/bookings/**", "/api/manager/bookings/**")
+                .securityMatcher("/api/bookings/**", "/api/manager/bookings/**", "/api/availability")
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/api/bookings/**", "/api/manager/bookings/**")
                         .permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/availability").permitAll()
+                        .requestMatchers("/api/availability").permitAll()
                         .requestMatchers("/api/manager/bookings/**")
                         .hasAnyAuthority(
                                 "OWNER", "MANAGER", "RECEPTIONIST",
@@ -37,6 +40,11 @@ public class BookingSecurityConfig {
                         )
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint((request, response, exception) ->
+                                SecurityErrorWriter.write(response, 401, "Unauthorized"))
+                        .accessDeniedHandler((request, response, exception) ->
+                                SecurityErrorWriter.write(response, 403, "Forbidden")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

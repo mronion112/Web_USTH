@@ -222,3 +222,49 @@ PATCH
 ```
 
 **Quy tắc chính:** Staff phải làm được Service và không bị trùng lịch.
+
+---
+
+## 5. Kiểm tra lịch trống
+
+`POST /api/availability`
+
+```json
+{
+  "items": [{ "serviceId": 1, "durationMinutes": 60 }],
+  "from": "2026-09-21T08:00:00",
+  "to": "2026-09-21T18:00:00",
+  "staffAccountId": null,
+  "slotIntervalMinutes": 30
+}
+```
+
+API chỉ trả Staff hỗ trợ toàn bộ dịch vụ và các slot phù hợp working hours, time-off,
+booking hiện có, preparation buffer và cleanup buffer. Khoảng tìm kiếm tối đa 31 ngày.
+
+## 6. Tìm Booking cho vận hành
+
+`GET /api/manager/bookings?from=&to=&status=&staffId=&unassigned=&code=&page=0&size=20`
+
+Chỉ Owner, Manager hoặc Receptionist. `size` tối đa 100; khoảng ngày tối đa 93 ngày.
+
+## 7. Check-in Booking
+
+`PATCH /api/manager/bookings/{bookingId}/check-in`
+
+Chỉ cho phép `CONFIRMED -> CHECKED_IN`, ghi `checked_in_at` và event `CHECKED_IN`.
+Gửi lại sau khi đã check-in trả cùng kết quả và không tạo event trùng.
+
+## 8. Đổi lịch của Customer
+
+`PATCH /api/bookings/{bookingCode}/reschedule`
+
+```json
+{
+  "bookingStart": "2026-09-22T14:00:00",
+  "staffAccountId": 21
+}
+```
+
+Chỉ chủ Booking được đổi lịch trước khi check-in. Backend kiểm tra lại skill và lịch trống,
+sau đó ghi event `RESCHEDULED`.

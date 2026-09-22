@@ -1,14 +1,46 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
-import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sparkles, Shield, CheckCircle2 } from 'lucide-react';
 import { IMAGES } from '@/lib/assets';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { ROLE_HOME } from '@/lib/access-control';
 
 export const AuthPage: React.FC = () => {
-  const { login } = useAuth();
+  const { user, loading, login } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const oauthFailed = searchParams.get('error') === 'oauth2';
+  const redirectTarget = searchParams.get('redirect');
 
-  const handleGoogleAuth = () => login();
+  useEffect(() => {
+    if (!loading && user) {
+      const target = redirectTarget || (user.roleCode === 'CUSTOMER' ? '/booking' : ROLE_HOME[user.roleCode] || '/booking');
+      navigate(target, { replace: true });
+    }
+  }, [user, loading, navigate, redirectTarget]);
+
+  const handleGoogleAuth = () => {
+    login(redirectTarget || '/booking');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F8F9F5] flex flex-col font-body">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center space-y-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1E3B2B] border-t-transparent mx-auto" />
+            <p className="text-xs text-[#526056]">Đang kiểm tra trạng thái đăng nhập…</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F9F5] flex flex-col font-body">
@@ -65,6 +97,11 @@ export const AuthPage: React.FC = () => {
 
             {/* Google Login Button */}
             <div className="space-y-4">
+              {oauthFailed && (
+                <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">
+                  Google không thể xác thực tài khoản. Vui lòng thử đăng nhập lại.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={handleGoogleAuth}

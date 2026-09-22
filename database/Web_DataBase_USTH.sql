@@ -656,7 +656,66 @@ CREATE INDEX idx_payments_status_method_created
 
 
 -- ============================================================
--- 15. FEEDBACK
+-- 15. SEPAY TRANSACTIONS
+-- Durable webhook inbox and reconciliation audit trail
+-- ============================================================
+
+CREATE TABLE sepay_transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    sepay_id BIGINT NOT NULL UNIQUE,
+
+    gateway VARCHAR(50) NOT NULL,
+
+    transaction_date DATETIME NULL,
+
+    account_number VARCHAR(100) NULL,
+
+    sub_account VARCHAR(100) NULL,
+
+    payment_code VARCHAR(100) NULL,
+
+    content VARCHAR(500) NULL,
+
+    transfer_type VARCHAR(10) NOT NULL,
+
+    transfer_amount DECIMAL(15,2) NOT NULL,
+
+    accumulated DECIMAL(15,2) NULL,
+
+    reference_code VARCHAR(150) NULL,
+
+    raw_payload LONGTEXT NOT NULL,
+
+    matched_payment_id BIGINT NULL UNIQUE,
+
+    status VARCHAR(30) NOT NULL,
+
+    review_reason VARCHAR(500) NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_sepay_transactions_amount
+        CHECK (transfer_amount > 0),
+
+    CONSTRAINT fk_sepay_transactions_payment
+        FOREIGN KEY (matched_payment_id)
+        REFERENCES payments(id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
+);
+
+CREATE INDEX idx_sepay_transactions_status_created
+    ON sepay_transactions(status, created_at);
+
+CREATE INDEX idx_sepay_transactions_code
+    ON sepay_transactions(payment_code);
+
+
+-- ============================================================
+-- 16. FEEDBACK
 -- Rating từ 1 đến 5
 -- Một Booking có tối đa một Feedback
 -- ============================================================
