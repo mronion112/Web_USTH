@@ -17,6 +17,36 @@ interface NotificationItem {
   link?: string;
 }
 
+export const notificationEventTitle = (eventType: string, bookingCode?: string) => {
+  const code = bookingCode ? ` (#${bookingCode})` : '';
+  switch (eventType) {
+    case 'CREATED': return `Lịch hẹn mới được đặt${code}`;
+    case 'CHECKED_IN': return `Khách đã check-in${code}`;
+    case 'SERVICE_STARTED': return `Bắt đầu ca phục vụ${code}`;
+    case 'COMPLETED': return `Hoàn thành ca trị liệu${code}`;
+    case 'PAYMENT_INITIALIZED': return `Có thanh toán mới đang chờ xử lý${code}`;
+    case 'PAYMENT_RECEIVED': return `Thanh toán thành công${code}`;
+    case 'PAYMENT_REFUNDED': return `Đã hoàn tiền${code}`;
+    case 'RESCHEDULED': return `Lịch hẹn đã đổi giờ${code}`;
+    case 'STAFF_ASSIGNED': return `Phân bổ kỹ thuật viên${code}`;
+    default: return `Sự kiện hệ thống${code}`;
+  }
+};
+
+export const notificationEventLink = (eventType: string) => {
+  switch (eventType) {
+    case 'PAYMENT_INITIALIZED':
+    case 'PAYMENT_RECEIVED':
+    case 'PAYMENT_REFUNDED':
+      return '/admin/payments';
+    case 'SERVICE_STARTED':
+    case 'CHECKED_IN':
+      return '/admin/live';
+    default:
+      return '/admin/booking';
+  }
+};
+
 export const AdminTopBar: React.FC = () => {
   const { role } = useAuth();
   const { chatMode, toggleChat, unreadCount: unreadChatCount } = useAdminChat();
@@ -44,43 +74,6 @@ export const AdminTopBar: React.FC = () => {
     }
   };
 
-  const getEventTitle = (eventType: string, bookingCode?: string) => {
-    const code = bookingCode ? ` (#${bookingCode})` : '';
-    switch (eventType) {
-      case 'CREATED':
-        return `Lịch hẹn mới được đặt${code}`;
-      case 'CHECKED_IN':
-        return `Khách đã check-in${code}`;
-      case 'SERVICE_STARTED':
-        return `Bắt đầu ca phục vụ${code}`;
-      case 'COMPLETED':
-        return `Hoàn thành ca trị liệu${code}`;
-      case 'PAYMENT_RECEIVED':
-        return `Thanh toán thành công${code}`;
-      case 'PAYMENT_REFUNDED':
-        return `Đã hoàn tiền${code}`;
-      case 'RESCHEDULED':
-        return `Lịch hẹn đã đổi giờ${code}`;
-      case 'STAFF_ASSIGNED':
-        return `Phân bổ kỹ thuật viên${code}`;
-      default:
-        return `Sự kiện hệ thống${code}`;
-    }
-  };
-
-  const getEventLink = (eventType: string) => {
-    switch (eventType) {
-      case 'PAYMENT_RECEIVED':
-      case 'PAYMENT_REFUNDED':
-        return '/admin/payments';
-      case 'SERVICE_STARTED':
-      case 'CHECKED_IN':
-        return '/admin/live';
-      default:
-        return '/admin/booking';
-    }
-  };
-
   const loadNotifications = useCallback(async (signal?: AbortSignal) => {
     try {
       const list = await notificationsApi.getRecent(expandAll ? 30 : 10, 0, signal);
@@ -88,11 +81,11 @@ export const AdminTopBar: React.FC = () => {
         const mapped: NotificationItem[] = list.map((n: ApiNotification) => ({
           id: String(n.id),
           type: n.eventType,
-          title: getEventTitle(n.eventType, n.bookingCode),
+          title: notificationEventTitle(n.eventType, n.bookingCode),
           description: n.message || `Cập nhật trạng thái ${n.eventType}`,
           time: formatEventTime(n.occurredAt),
           read: false,
-          link: getEventLink(n.eventType),
+          link: notificationEventLink(n.eventType),
         }));
         setNotifications((current) => {
           const readIds = new Set(current.filter((item) => item.read).map((item) => item.id));
@@ -104,7 +97,7 @@ export const AdminTopBar: React.FC = () => {
     }
   }, [expandAll]);
 
-  useRefresh('notification', loadNotifications, ['OWNER', 'MANAGER', 'RECEPTIONIST'].includes(role));
+  useRefresh('notification', loadNotifications, ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT'].includes(role));
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const displayedNotifications = expandAll ? notifications : notifications.slice(0, 5);

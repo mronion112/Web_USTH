@@ -81,7 +81,7 @@ class ProfileControllerTest {
     @Test
     void partialUpdatePreservesPreferencesAndPrivateNotes() throws Exception {
         mvc.perform(put("/api/profile/me").header("Authorization", bearer())
-                        .contentType("application/json").content("{\"phone\":\"0987654321\"}"))
+                        .contentType("application/json").content("{\"phone\":\"0987 654 321\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.phone").value("0987654321"))
                 .andExpect(jsonPath("$.data.preferences").value("Massage nhẹ"));
         verify(customers).save(profile);
@@ -126,7 +126,7 @@ class ProfileControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "[]", "null", "{", "{\"phone\":123}", "{\"phone\":\"---\"}",
+    @ValueSource(strings = {"{}", "[]", "null", "{", "{\"phone\":123}", "{\"phone\":\"---\"}", "{\"phone\":\"123\"}",
             "{\"phone\":\"abc\"}", "{\"displayName\":\" \"}", "{\"displayName\":null}",
             "{\"preferences\":true}", "{\"role\":\"OWNER\"}", "{\"employee_code\":\"X\"}",
             "{\"job_title\":\"X\"}", "{\"internalNotes\":\"X\"}", "{\"accountId\":99}"})

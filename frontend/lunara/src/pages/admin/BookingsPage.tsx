@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AvailabilitySlotPicker } from '@/components/booking/AvailabilitySlotPicker';
 import {
   bookingsApi,
   servicesApi,
   staffDirectoryApi,
+  ApiBooking,
   ApiBookingSearch,
   ApiService,
   PublicStaff,
@@ -17,6 +19,7 @@ import { Search, Plus, CheckCircle2, ChevronRight, X, UserCheck, CalendarClock, 
 import { useSearchParams } from 'react-router-dom';
 import { useRefresh } from '@/lib/use-refresh';
 import { latestBookingsQuery } from '@/lib/admin-booking-query';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@/lib/phone';
 
 const STATUS_LABELS: Record<string, string> = {
   ALL: 'Tất cả trạng thái',
@@ -35,12 +38,6 @@ const STATUS_COLORS: Record<string, string> = {
   PENDING: '#E0A96D',
 };
 
-const currentLocalDateTime = () => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 16);
-};
-
 export const BookingsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
@@ -49,6 +46,7 @@ export const BookingsPage: React.FC = () => {
   const [services, setServices] = useState<ApiService[]>([]);
   const [staffList, setStaffList] = useState<PublicStaff[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<ApiBookingSearch | null>(null);
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<ApiBooking | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -104,6 +102,10 @@ export const BookingsPage: React.FC = () => {
     if (!formCustomerName.trim() || !formCustomerPhone.trim()) {
       return;
     }
+    if (!isValidPhoneNumber(formCustomerPhone)) {
+      alert('Số điện thoại không hợp lệ.');
+      return;
+    }
 
     try {
       const selectedService = services.find((s) => Number(s.id) === Number(formServiceId)) || services[0];
@@ -113,7 +115,7 @@ export const BookingsPage: React.FC = () => {
         staffAccountId: formStaffId === 'AUTO' ? undefined : Number(formStaffId),
         bookingStart: startIso,
         customerName: formCustomerName.trim(),
-        customerPhone: formCustomerPhone.trim(),
+        customerPhone: normalizePhoneNumber(formCustomerPhone),
         customerEmail: formCustomerEmail.trim() || undefined,
         customerNote: formNote.trim() || undefined,
         items: [
@@ -141,11 +143,15 @@ export const BookingsPage: React.FC = () => {
 
   const handleOpenDetail = (b: ApiBookingSearch) => {
     setSelectedBooking(b);
+    setSelectedBookingDetail(null);
     setAssignStaffId(b.staffAccountId || '');
     setRescheduleStart(b.bookingStart.slice(0, 16));
     setRescheduleStaffId(b.staffAccountId || '');
     setDetailOpen(true);
     setError('');
+    void bookingsApi.getByCode(b.bookingCode).then(setSelectedBookingDetail).catch((err) => {
+      setError(err instanceof Error ? err.message : 'Không tải được chi tiết dịch vụ của lịch hẹn');
+    });
   };
 
   const handleReschedule = async () => {
@@ -331,7 +337,10 @@ export const BookingsPage: React.FC = () => {
                 filtered.map((b) => (
                   <tr key={b.id} className="hover:bg-[#FAFBF9] transition-colors">
                     <td className="py-4 px-6 font-semibold text-[#14271C]">{b.bookingCode}</td>
-                    <td className="py-4 px-6 font-medium text-[#14271C]">{b.customerName}</td>
+                    <td className="py-4 px-6 font-medium text-[#14271C]">
+                      <div>{b.customerName}</div>
+                      <div className="mt-0.5 text-[11px] font-normal text-[#6B726C]">{b.customerPhone || 'Chưa có SĐT'}</div>
+                    </td>
                     <td className="py-4 px-6 text-[#526056]">
                       {b.staffName ? (
                         <span className="inline-flex items-center gap-1">
@@ -403,6 +412,7 @@ export const BookingsPage: React.FC = () => {
                   Vé hẹn #{selectedBooking.bookingCode}
                 </SheetTitle>
                 <p className="text-xs text-[#6B726C] mt-0.5">Khách hàng: {selectedBooking.customerName}</p>
+                <p className="text-xs text-[#6B726C]">SĐT: {selectedBooking.customerPhone || selectedBookingDetail?.customerPhoneSnapshot || 'Chưa có SĐT'}</p>
               </div>
               <SheetClose asChild>
                 <button type="button" className="p-1 text-[#8EAA97] hover:text-[#14271C]">
@@ -484,16 +494,12 @@ export const BookingsPage: React.FC = () => {
 
                 <div className="pt-3 border-t border-[#E2E8E3] space-y-2">
                   <Label className="text-xs font-semibold text-[#14271C]">Đổi lịch hẹn</Label>
-                  <Input
-                    type="datetime-local"
-                    value={rescheduleStart}
-                    min={currentLocalDateTime()}
-                    onChange={(event) => setRescheduleStart(event.target.value)}
-                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
-                  />
                   <select
                     value={rescheduleStaffId}
-                    onChange={(event) => setRescheduleStaffId(Number(event.target.value) || '')}
+                    onChange={(event) => {
+                      setRescheduleStaffId(Number(event.target.value) || '');
+                      setRescheduleStart('');
+                    }}
                     disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
                     className="w-full h-10 px-3 text-xs bg-white border border-[#E2E8E3] rounded-xl focus:ring-[#1E3B2B]"
                   >
@@ -502,6 +508,21 @@ export const BookingsPage: React.FC = () => {
                       <option key={staff.accountId} value={staff.accountId}>{staff.displayName}</option>
                     ))}
                   </select>
+                  {selectedBookingDetail ? (
+                    <AvailabilitySlotPicker
+                      items={selectedBookingDetail.items.map((item) => ({
+                        serviceId: Number(item.serviceId),
+                        durationMinutes: item.durationMinutes,
+                      }))}
+                      staffAccountId={rescheduleStaffId ? Number(rescheduleStaffId) : selectedBooking.staffAccountId}
+                      excludedBookingId={selectedBooking.id}
+                      value={rescheduleStart}
+                      onChange={setRescheduleStart}
+                      disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                    />
+                  ) : (
+                    <p className="text-xs text-[#6B726C]">Đang tải lịch và khung giờ khả dụng…</p>
+                  )}
                   <Button
                     variant="outline"
                     onClick={handleReschedule}

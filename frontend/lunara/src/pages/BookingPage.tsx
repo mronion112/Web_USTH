@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { ApiService, PublicStaff, bookingsApi, servicesApi, paymentsApi, profileApi, staffDirectoryApi } from '@/lib/api';
 import { useRefresh } from '@/lib/use-refresh';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@/lib/phone';
 import {
   Clock,
   User,
@@ -224,6 +225,10 @@ export const BookingPage: React.FC = () => {
       setError('Vui lòng nhập đầy đủ họ tên và số điện thoại.');
       return;
     }
+    if (!isValidPhoneNumber(customerPhone)) {
+      setError('Số điện thoại không hợp lệ. Hãy nhập 10 chữ số bắt đầu bằng 0 hoặc số quốc tế có mã quốc gia.');
+      return;
+    }
     setError(''); setPending(true);
     try {
       const yyyymmdd = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
@@ -231,17 +236,15 @@ export const BookingPage: React.FC = () => {
         serviceId: Number(item.serviceId),
         durationMinutes: item.durationMinutes,
       }));
+      const normalizedPhone = normalizePhoneNumber(customerPhone);
       if (user.roleCode === 'CUSTOMER') {
-        try {
-          await profileApi.updateMe({
-            displayName: customerName.trim(),
-            phone: customerPhone.trim(),
-          });
-        } catch {
-          // Non-blocking profile update failure
-        }
+        await profileApi.updateMe({
+          displayName: customerName.trim(),
+          phone: normalizedPhone,
+        });
       }
       const booking = await bookingsApi.create({
+        customerPhone: normalizedPhone,
         customerNote,
         bookingStart: `${yyyymmdd}T${selectedTime}:00`,
         staffAccountId: selectedStaffId === 'none' ? undefined : Number(selectedStaffId),

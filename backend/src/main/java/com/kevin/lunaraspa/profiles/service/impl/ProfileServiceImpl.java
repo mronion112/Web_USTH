@@ -5,6 +5,7 @@ import com.kevin.lunaraspa.authentication_account.repository.AccountRepository;
 import com.kevin.lunaraspa.core.exception.AppException;
 import com.kevin.lunaraspa.core.exception.AuthErrorCode;
 import com.kevin.lunaraspa.core.exception.ProfileErrorCode;
+import com.kevin.lunaraspa.core.validation.PhoneNumberValidator;
 import com.kevin.lunaraspa.profiles.dto.ProfileResponseDTO;
 import com.kevin.lunaraspa.profiles.dto.ProfileUpdateRequest;
 import com.kevin.lunaraspa.profiles.entity.CustomerProfile;
@@ -40,13 +41,12 @@ public class ProfileServiceImpl implements ProfileService {
             throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
         }
         String name = normalize(request.getDisplayName());
-        String phone = normalize(request.getPhone());
+        String phone = PhoneNumberValidator.normalize(request.getPhone());
         String preferences = normalize(request.getPreferences());
         if (request.isDisplayNamePresent() && (name == null || name.codePointCount(0, name.length()) > 150)) {
             throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
         }
-        if (phone != null && (phone.length() > 30 || !phone.matches("\\+?[0-9 ()-]+")
-                || phone.chars().filter(Character::isDigit).count() < 3)) {
+        if (phone != null && !PhoneNumberValidator.isValid(phone)) {
             throw new AppException(ProfileErrorCode.INVALID_PROFILE_DATA);
         }
         if (preferences != null && preferences.getBytes(StandardCharsets.UTF_8).length > 65535) {

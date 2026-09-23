@@ -11,4 +11,5 @@ public class AvailabilityRequest {
     private LocalDateTime to;
     private Long staffAccountId;
     private Integer slotIntervalMinutes;
+    private Long excludedBookingId;
 }

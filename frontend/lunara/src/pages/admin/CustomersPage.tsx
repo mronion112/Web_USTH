@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Search, Plus, Mail, Phone, ChevronDown, ChevronUp, Save, Sparkles, Heart } from 'lucide-react';
 import { customersApi, ApiCustomer } from '@/lib/api';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@/lib/phone';
 
 export const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<ApiCustomer[]>([]);
@@ -82,11 +83,15 @@ export const CustomersPage: React.FC = () => {
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formPhone.trim()) return;
+    if (!isValidPhoneNumber(formPhone)) {
+      alert('Số điện thoại không hợp lệ.');
+      return;
+    }
 
     try {
       await customersApi.create({
         name: formName.trim(),
-        phone: formPhone.trim(),
+        phone: normalizePhoneNumber(formPhone),
         email: formEmail.trim() || undefined,
         internalNotes: formNotes.trim() || undefined,
         preferences: formPrefs.trim() || undefined,

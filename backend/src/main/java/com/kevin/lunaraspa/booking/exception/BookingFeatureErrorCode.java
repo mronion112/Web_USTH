@@ -23,7 +23,8 @@ public enum BookingFeatureErrorCode implements BaseErrorCode {
     BOOKING_CODE_GENERATION_FAILED("BKG_013", "Could not generate booking code", HttpStatus.INTERNAL_SERVER_ERROR),
     STAFF_ACCOUNT_REQUIRED("BKG_014", "An active staff account is required", HttpStatus.FORBIDDEN),
     INVALID_STATUS_TRANSITION("BKG_015", "Booking status transition is not allowed", HttpStatus.CONFLICT),
-    BOOKING_EMAIL_UNAVAILABLE("BKG_016", "Booking does not have a deliverable customer email", HttpStatus.CONFLICT);
+    BOOKING_EMAIL_UNAVAILABLE("BKG_016", "Booking does not have a deliverable customer email", HttpStatus.CONFLICT),
+    INVALID_CUSTOMER_PHONE("BKG_017", "Customer phone number is invalid", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

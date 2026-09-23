@@ -128,6 +128,10 @@ public class PaymentController {
             payment.setQrPayload(vietQrPayloadGenerator.generate(payment.getAmount(), code));
         }
         paymentRepository.saveAndFlush(payment);
+        booking.addEvent(BookingEvent.builder().eventType("PAYMENT_INITIALIZED").actorAccountId(actor.getId())
+                .message("Payment " + code + " was initialized and is awaiting payment.")
+                .occurredAt(LocalDateTime.now()).build());
+        bookingRepository.saveAndFlush(booking);
         realtimeEventPublisher.paymentChanged(booking, "PAYMENT_INITIALIZED");
         return ResponseBuilder.ok(toResponse(payment), HttpStatus.CREATED, "Payment created successfully");
     }

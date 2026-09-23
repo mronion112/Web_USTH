@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Edit2, Clock, Power } from 'lucide-react';
 import { SlidingTabs } from '@/components/transitions/SlidingTabs';
 import { TiltCard } from '@/components/transitions/TiltCard';
-import { servicesApi, ApiService } from '@/lib/api';
+import { servicesApi, staffDirectoryApi, ApiService, PublicStaff } from '@/lib/api';
 
 const DEFAULT_CATEGORY_IMAGES: Record<string, string> = {
   FACIAL: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&q=80&w=800',
@@ -26,6 +26,7 @@ export const ServicesPage: React.FC = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [staffList, setStaffList] = useState<PublicStaff[]>([]);
 
   // Form state for new service
   const [formName, setFormName] = useState('');
@@ -35,6 +36,7 @@ export const ServicesPage: React.FC = () => {
   const [formAdjustable] = useState(true);
   const [formImage, setFormImage] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  const [formStaffIds, setFormStaffIds] = useState<number[]>([]);
 
   const loadServices = useCallback(async () => {
     try {
@@ -51,7 +53,18 @@ export const ServicesPage: React.FC = () => {
 
   useEffect(() => {
     loadServices();
+    staffDirectoryApi.getAll().then((staff) => {
+      const bookableStaff = staff.filter((person) => person.isBookable !== false);
+      setStaffList(bookableStaff);
+      setFormStaffIds(bookableStaff.map((person) => Number(person.accountId)));
+    }).catch(() => setStaffList([]));
   }, [loadServices]);
+
+  const toggleFormStaff = (accountId: number) => {
+    setFormStaffIds((current) => current.includes(accountId)
+      ? current.filter((id) => id !== accountId)
+      : [...current, accountId]);
+  };
 
   const uniqueCategories = Array.from(new Set(services.map((s) => s.category).filter(Boolean)));
   const categories = ['All', ...uniqueCategories];
@@ -101,7 +114,7 @@ export const ServicesPage: React.FC = () => {
 
   const handleCreateService = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim() || formStaffIds.length === 0) return;
 
     try {
       await servicesApi.create({
@@ -116,6 +129,7 @@ export const ServicesPage: React.FC = () => {
         pricePerDurationStep: 200000,
         preparationBufferMinutes: 10,
         cleanupBufferMinutes: 15,
+        staffAccountIds: formStaffIds,
       });
 
       await loadServices();
@@ -127,6 +141,7 @@ export const ServicesPage: React.FC = () => {
       setFormName('');
       setFormDescription('');
       setFormImage('');
+      setFormStaffIds(staffList.map((person) => Number(person.accountId)));
     } catch (err: any) {
       alert(err.message || 'Lỗi khi tạo dịch vụ mới');
     }
@@ -459,6 +474,29 @@ export const ServicesPage: React.FC = () => {
                 />
               </div>
 
+              <fieldset className="space-y-2 rounded-2xl border border-[#E2E8E3] p-3">
+                <legend className="px-1 text-xs font-semibold text-[#14271C]">KTV có thể thực hiện *</legend>
+                <p className="text-[11px] text-[#6B726C]">Dịch vụ chỉ có khung giờ đặt lịch khi ít nhất một KTV được gán.</p>
+                <div className="grid max-h-32 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {staffList.map((staff) => {
+                    const accountId = Number(staff.accountId);
+                    return (
+                      <label key={accountId} className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#F8F9F5] px-3 py-2 text-xs text-[#14271C]">
+                        <input
+                          type="checkbox"
+                          checked={formStaffIds.includes(accountId)}
+                          onChange={() => toggleFormStaff(accountId)}
+                          className="h-4 w-4 accent-[#1E3B2B]"
+                        />
+                        <span>{staff.displayName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {staffList.length === 0 && <p className="text-xs text-red-700">Chưa có KTV đang nhận lịch.</p>}
+                {staffList.length > 0 && formStaffIds.length === 0 && <p className="text-xs text-red-700">Hãy chọn ít nhất một KTV.</p>}
+              </fieldset>
+
               <DialogFooter className="pt-2">
                 <Button
                   type="button"
@@ -470,6 +508,7 @@ export const ServicesPage: React.FC = () => {
                 </Button>
                 <Button
                   type="submit"
+                  disabled={formStaffIds.length === 0}
                   className="rounded-xl bg-[#1E3B2B] text-white hover:bg-[#14271C] text-xs"
                 >
                   Tạo dịch vụ

@@ -112,6 +112,23 @@ class BookingServiceManagerWorkflowTest {
                 .isEqualTo(Sort.Direction.DESC);
     }
 
+    @Test
+    void managerSearchReturnsCustomerPhoneSnapshot() {
+        when(accounts.findByEmail("owner@example.com")).thenReturn(Optional.of(manager("OWNER")));
+        Booking booking = booking("customer@example.com");
+        booking.setCustomerPhoneSnapshot("0912345678");
+        when(bookings.findAll(any(Specification.class), any(Pageable.class))).thenAnswer(invocation -> {
+            Pageable pageable = invocation.getArgument(1);
+            return new PageImpl<>(List.of(booking), pageable, 1);
+        });
+
+        var response = service.searchBookings(null, null, null, null, null, null, 0, 50,
+                BookingSortField.CREATED_AT, Sort.Direction.DESC, "owner@example.com");
+
+        assertThat(response.getContent()).singleElement()
+                .satisfies(item -> assertThat(item.getCustomerPhone()).isEqualTo("0912345678"));
+    }
+
     private Account manager(String role) {
         return Account.builder().id(2L).email(role.toLowerCase() + "@example.com").displayName(role)
                 .isActive(true).role(Role.builder().code(role).name(role).build()).build();

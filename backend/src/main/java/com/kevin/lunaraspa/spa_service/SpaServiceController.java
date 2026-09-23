@@ -71,7 +71,8 @@ public class SpaServiceController {
                 .pricePerDurationStep(adjustable ? request.pricePerDurationStep() : null)
                 .preparationBufferMinutes(orZero(request.preparationBufferMinutes()))
                 .cleanupBufferMinutes(orZero(request.cleanupBufferMinutes())).active(true).build());
-        return ResponseBuilder.ok(toResponse(saved, false), HttpStatus.CREATED, "Create service successfully");
+        replaceStaffAssignments(saved.getId(), request.staffAccountIds(), true);
+        return ResponseBuilder.ok(toResponse(saved, true), HttpStatus.CREATED, "Create service successfully");
     }
 
     @PutMapping("/manager/services/{id}")
@@ -106,8 +107,9 @@ public class SpaServiceController {
         if (request.pricePerDurationStep() != null) {
             service.setPricePerDurationStep(request.pricePerDurationStep());
         }
+        replaceStaffAssignments(service.getId(), request.staffAccountIds(), false);
         SpaService saved = repository.saveAndFlush(service);
-        return ResponseBuilder.ok(toResponse(saved, false), "Update service successfully");
+        return ResponseBuilder.ok(toResponse(saved, true), "Update service successfully");
     }
 
     @DeleteMapping("/manager/services/{id}")
@@ -140,6 +142,40 @@ public class SpaServiceController {
                 s.getPricePerDurationStep(), s.getPreparationBufferMinutes(), s.getCleanupBufferMinutes(),
                 s.getActive(), staff);
     }
+
+    private void replaceStaffAssignments(Long serviceId, List<Long> requestedStaffIds, boolean required) {
+        if (requestedStaffIds == null) {
+            if (required) throw new AppException(ServiceErrorCode.INVALID_REQUEST);
+            return;
+        }
+
+        List<Long> staffIds = requestedStaffIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (staffIds.isEmpty()) throw new AppException(ServiceErrorCode.INVALID_REQUEST);
+
+        Long validStaffCount = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM staff_profiles sp
+                JOIN accounts a ON a.id = sp.account_id
+                WHERE sp.account_id IN (:staffIds)
+                  AND sp.is_bookable = TRUE
+                  AND a.is_active = TRUE
+                """, Map.of("staffIds", staffIds), Long.class);
+        if (validStaffCount == null || validStaffCount.longValue() != staffIds.size()) {
+            throw new AppException(ServiceErrorCode.INVALID_REQUEST);
+        }
+
+        jdbc.update("DELETE FROM staff_services WHERE service_id = :serviceId", Map.of("serviceId", serviceId));
+        for (Long staffId : staffIds) {
+            jdbc.update("""
+                    INSERT INTO staff_services (staff_account_id, service_id)
+                    VALUES (:staffId, :serviceId)
+                    """, Map.of("staffId", staffId, "serviceId", serviceId));
+        }
+    }
+
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static String trim(String value) { return value == null || value.isBlank() ? null : value.trim(); }
     private static int orZero(Integer value) { return value == null ? 0 : value; }

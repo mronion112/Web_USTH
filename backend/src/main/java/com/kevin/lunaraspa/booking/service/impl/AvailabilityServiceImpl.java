@@ -60,7 +60,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
                 if (repository.countCoveringWorkingHours(staffId, start.getDayOfWeek().getValue(),
                         occupiedStart.toLocalTime(), occupiedEnd.toLocalTime()) == 0) continue;
                 if (repository.countOverlappingTimeOff(staffId, occupiedStart, occupiedEnd) > 0
-                        || repository.countOverlappingBookings(staffId, occupiedStart, occupiedEnd, null) > 0) continue;
+                        || repository.countOverlappingBookings(staffId, occupiedStart, occupiedEnd,
+                        request.getExcludedBookingId()) > 0) continue;
                 slots.add(AvailableSlot.builder().staffAccountId(staffId)
                         .staffName(repository.findAccountDisplayName(staffId).orElse(null))
                         .bookingStart(start).bookingEnd(end).build());
