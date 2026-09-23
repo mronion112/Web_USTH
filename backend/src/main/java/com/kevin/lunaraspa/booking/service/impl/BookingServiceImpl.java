@@ -246,7 +246,8 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new AppException(BookingFeatureErrorCode.BOOKING_NOT_FOUND));
         if (booking.getStatus() == BookingStatus.CHECKED_IN
                 || booking.getStatus() == BookingStatus.IN_SERVICE
-                || booking.getStatus() == BookingStatus.COMPLETED) {
+                || booking.getStatus() == BookingStatus.COMPLETED
+                || booking.getStatus() == BookingStatus.CANCELLED) {
             throw new AppException(BookingFeatureErrorCode.BOOKING_NOT_ASSIGNABLE);
         }
 
@@ -396,7 +397,8 @@ public class BookingServiceImpl implements BookingService {
     private RescheduleBookingResponse applyReschedule(Booking booking, RescheduleBookingRequest request,
                                                       Long actorAccountId, AssignmentSource explicitSource) {
         if (booking.getStatus() == BookingStatus.CHECKED_IN || booking.getStatus() == BookingStatus.IN_SERVICE
-                || booking.getStatus() == BookingStatus.COMPLETED)
+                || booking.getStatus() == BookingStatus.COMPLETED
+                || booking.getStatus() == BookingStatus.CANCELLED)
             throw new AppException(BookingFeatureErrorCode.INVALID_STATUS_TRANSITION);
         Set<Long> serviceIds = booking.getItems().stream().map(BookingItem::getServiceId).collect(java.util.stream.Collectors.toSet());
         Map<Long, ServiceSnapshotProjection> snapshots = bookingRepository.findActiveServicesByIds(serviceIds)

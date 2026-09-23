@@ -25,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
   CHECKED_IN: 'Đã check-in',
   IN_SERVICE: 'Đang phục vụ',
   COMPLETED: 'Hoàn thành',
+  CANCELLED: 'Đã huỷ',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -33,6 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
   CONFIRMED: '#C5A880',
   CHECKED_IN: '#526056',
   PENDING: '#E0A96D',
+  CANCELLED: '#B23B3B',
 };
 
 const currentLocalDateTime = () => {
@@ -474,7 +476,7 @@ export const BookingsPage: React.FC = () => {
                     <Button
                       variant="outline"
                       onClick={handleAssignStaff}
-                      disabled={!assignStaffId}
+                      disabled={!assignStaffId || selectedBooking.status === 'CANCELLED'}
                       className="h-10 px-4 text-xs rounded-xl text-[#1E3B2B] border-[#D9E5DC] hover:border-[#1E3B2B] cursor-pointer"
                     >
                       Gán KTV
@@ -489,12 +491,12 @@ export const BookingsPage: React.FC = () => {
                     value={rescheduleStart}
                     min={currentLocalDateTime()}
                     onChange={(event) => setRescheduleStart(event.target.value)}
-                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED'].includes(selectedBooking.status)}
                   />
                   <select
                     value={rescheduleStaffId}
                     onChange={(event) => setRescheduleStaffId(Number(event.target.value) || '')}
-                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                    disabled={['CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED'].includes(selectedBooking.status)}
                     className="w-full h-10 px-3 text-xs bg-white border border-[#E2E8E3] rounded-xl focus:ring-[#1E3B2B]"
                   >
                     <option value="">Giữ KTV hiện tại / tự động phân công</option>
@@ -505,7 +507,7 @@ export const BookingsPage: React.FC = () => {
                   <Button
                     variant="outline"
                     onClick={handleReschedule}
-                    disabled={!rescheduleStart || rescheduleUnchanged || actionLoading || ['CHECKED_IN', 'IN_SERVICE', 'COMPLETED'].includes(selectedBooking.status)}
+                    disabled={!rescheduleStart || rescheduleUnchanged || actionLoading || ['CHECKED_IN', 'IN_SERVICE', 'COMPLETED', 'CANCELLED'].includes(selectedBooking.status)}
                     className="w-full h-10 text-xs rounded-xl text-[#1E3B2B] border-[#D9E5DC] hover:border-[#1E3B2B]"
                   >
                     <CalendarClock className="h-4 w-4 mr-2" />

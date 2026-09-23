@@ -6,5 +6,6 @@ public enum BookingStatus {
     CONFIRMED,
     CHECKED_IN,
     IN_SERVICE,
-    COMPLETED
+    COMPLETED,
+    CANCELLED
 }

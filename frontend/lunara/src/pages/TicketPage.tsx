@@ -16,6 +16,7 @@ export const TicketPage: React.FC = () => {
   const [staff, setStaff] = useState<PublicStaff[]>([]);
   const [error, setError] = useState('');
   const isCompleted = booking?.status === 'COMPLETED';
+  const isCancelled = booking?.status === 'CANCELLED';
 
   const reload = useCallback((signal?: AbortSignal) => {
     if (!id) return;
@@ -175,8 +176,8 @@ export const TicketPage: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span>Trạng thái dịch vụ:</span>
-              <span className={`font-semibold ${isCompleted ? 'text-[#2E7D32]' : 'text-amber-700'}`}>
-                {isCompleted ? '● ĐÃ HOÀN THÀNH LIỆU TRÌNH' : `○ ${booking.status}`}
+              <span className={`font-semibold ${isCompleted ? 'text-[#2E7D32]' : isCancelled ? 'text-[#B23B3B]' : 'text-amber-700'}`}>
+                {isCompleted ? '● ĐÃ HOÀN THÀNH LIỆU TRÌNH' : isCancelled ? '● ĐÃ HUỶ — ĐÃ HOÀN TIỀN' : `○ ${booking.status}`}
               </span>
             </div>
             <div className="pt-2 border-t border-[#E2E8E3] flex justify-between items-baseline">
@@ -184,6 +185,13 @@ export const TicketPage: React.FC = () => {
               <span className="font-display text-lg font-bold text-[#1E3B2B]">{Number(booking.totalAmount).toLocaleString('vi-VN')} đ</span>
             </div>
           </div>
+
+          {isCancelled && (
+            <div className="pt-4 border-t border-[#E2E8E3] space-y-1">
+              <p className="text-xs font-bold text-[#B23B3B]">Lịch hẹn đã được huỷ và hoàn tiền.</p>
+              <p className="text-xs text-[#526056]">Vé này không còn hiệu lực. Quý khách vui lòng đặt lịch mới nếu cần.</p>
+            </div>
+          )}
 
           {booking.status === 'CONFIRMED' && <div className="pt-4 border-t border-[#E2E8E3] space-y-2">
             <h3 className="text-xs font-bold text-[#14271C]">Cần đổi lịch?</h3>
