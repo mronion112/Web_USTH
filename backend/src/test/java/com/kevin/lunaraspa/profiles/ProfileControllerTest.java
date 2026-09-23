@@ -68,6 +68,7 @@ class ProfileControllerTest {
 
     private String bearer() { return "Bearer " + jwt.generateAccessToken(EMAIL, "CUSTOMER"); }
 
+    // Test case: Khách hàng đã đăng nhập có thể đọc thông tin hồ sơ của chính mình
     @Test
     void authenticatedCustomerCanReadProfileWithoutPermissionRegistryEntry() throws Exception {
         mvc.perform(get("/api/profile/me").header("Authorization", bearer()))
