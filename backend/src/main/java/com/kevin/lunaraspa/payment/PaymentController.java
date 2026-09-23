@@ -27,6 +27,8 @@ import java.util.*;
 @RequiredArgsConstructor
 public class PaymentController {
     private static final Set<String> OPERATIONS = Set.of("OWNER", "MANAGER", "RECEPTIONIST", "ACCOUNTANT");
+    private static final Set<BookingStatus> CANCELLABLE_ON_REFUND =
+            EnumSet.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
@@ -171,8 +173,18 @@ public class PaymentController {
                 .orElseThrow(() -> new AppException(PaymentErrorCode.BOOKING_NOT_FOUND));
         booking.addEvent(BookingEvent.builder().eventType("PAYMENT_REFUNDED").actorAccountId(actor.getId())
                 .message("Payment " + payment.getTransactionCode() + " was refunded.").occurredAt(LocalDateTime.now()).build());
+        // Refunding before the service starts cancels the booking and frees the staff slot.
+        // After check-in it is a post-service compensation, so the booking status is kept.
+        boolean cancelled = CANCELLABLE_ON_REFUND.contains(booking.getStatus());
+        if (cancelled) {
+            booking.setStatus(BookingStatus.CANCELLED);
+            booking.addEvent(BookingEvent.builder().eventType("CANCELLED").actorAccountId(actor.getId())
+                    .message("Booking cancelled after refund of " + payment.getTransactionCode() + ".")
+                    .occurredAt(LocalDateTime.now()).build());
+        }
         bookingRepository.saveAndFlush(booking);
         realtimeEventPublisher.paymentChanged(booking, "PAYMENT_REFUNDED");
+        if (cancelled) realtimeEventPublisher.bookingChanged(booking, "CANCELLED");
         return ResponseBuilder.ok(toResponse(saved), "Payment refunded successfully");
     }
 

@@ -374,6 +374,7 @@ CREATE INDEX idx_staff_time_off_range
 -- CHECKED_IN
 -- IN_SERVICE
 -- COMPLETED
+-- CANCELLED
 --
 -- assignment_source:
 -- SYSTEM
@@ -396,7 +397,8 @@ CREATE TABLE bookings (
         'CONFIRMED',
         'CHECKED_IN',
         'IN_SERVICE',
-        'COMPLETED'
+        'COMPLETED',
+        'CANCELLED'
     ) NOT NULL DEFAULT 'PENDING_PAYMENT',
 
     assignment_source ENUM(

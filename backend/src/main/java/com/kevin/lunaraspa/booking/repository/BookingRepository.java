@@ -127,6 +127,7 @@ public interface BookingRepository extends BaseRepository<Booking, Long> {
             FROM bookings b
             WHERE b.staff_account_id = :staffAccountId
               AND b.id <> COALESCE(:excludedBookingId, -1)
+              AND b.status <> 'CANCELLED'
               AND b.booking_start < :endAt
               AND b.booking_end > :startAt
             """, nativeQuery = true)
