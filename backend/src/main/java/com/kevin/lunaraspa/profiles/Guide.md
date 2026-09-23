@@ -145,3 +145,8 @@ Test `LunaraSpaApplicationTests` của dự án cần cấu hình DB/Redis/OAuth
 Frontend hiện chưa có trang Profile. Auth frontend gọi `/api/v1/auth/...` và dùng cookie,
 trong khi backend hiện dùng `/api/auth/...` và Bearer JWT. Cần đồng bộ luồng Auth rồi
 kết nối trang Profile; chạy Vite đơn thuần chưa xác minh được API này.
+
+### Ghi chú quy chuẩn dữ liệu
+- Dữ liệu `phone` và `preferences` của Customer được làm sạch khoảng trắng trước khi lưu.
+- Khách hàng mới khi cập nhật hồ sơ lần đầu sẽ tự động được khởi tạo bản ghi `customer_profiles` tương ứng nếu chưa tồn tại.
+
